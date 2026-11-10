@@ -33,7 +33,7 @@ Keep one integrator responsible for shared app files. Give animation generation,
 
 - November 10 — Added AGENTS.md with the ownership and handoff rules, and this record with observed agent assignments.
 - November 10 — Codex checked JavaScript syntax for index.html and creator-lab.html, verified the exported JSON is 256 by 256 at 30 frames per second with 60 frames and a pulse layer, and opened the demo through the local web server. The teal animation rendered. Pause changed the control to Play, restart returned it to Pause, and speed buttons were exercised. The page was left at normal speed.
-- November 10 — Prepared upload to nguyenemily408/chromesthesia on codex/creator-mcp-agent-work. The connected GitHub API account lacks write access to Emily’s repository, so the upload uses Emily’s signed-in browser. GitHub publication verification is pending.
+- November 10 — Prepared upload to nguyenemily408/chromesthesia on codex/creator-mcp-agent-work. The connected GitHub API account lacks write access to Emily’s repository, so the upload uses Emily’s signed-in browser. Published seven project files on that branch and opened pull request #1. The branch and pull request were verified in GitHub. Review link is https://github.com/nguyenemily408/chromesthesia/pull/1.
 
 ## Project name update
 
