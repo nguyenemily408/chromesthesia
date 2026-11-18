@@ -1,0 +1,1233 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Sound of Color · Three styles, triggers (local copy)</title>
+<style>
+  *{box-sizing:border-box}
+  :root{font:13px/1.35 "Instrument Sans",system-ui,sans-serif;color:#2a2522;--paper:#faf8f5;--line:#d9d3cb;--ink:#2b1e32;--bar:46px;background:var(--paper)}
+  html,body{height:100%;margin:0;overflow:hidden}
+  main{position:fixed;left:0;right:0;top:0;bottom:var(--bar);overflow:hidden}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  label,button,select{font:inherit;color:var(--ink)}
+  input[type=radio],.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+  :focus-visible,label:has(:focus-visible){outline:2px solid #7832a1;outline-offset:2px}
+  [hidden]{display:none!important}
+  #hud{position:absolute;left:10px;top:10px;display:flex;flex-direction:column;gap:6px;align-items:flex-start;max-width:calc(100% - 20px);pointer-events:none}
+  #hud>*{background:#faf8f5d9;backdrop-filter:blur(6px);border-radius:10px;padding:5px 10px;box-shadow:0 1px 6px #2516301a}
+  #hud:not(:has(#legend:not(:empty))) #legend,#legend:empty{display:none}
+  #legend{display:flex;gap:4px 9px;align-items:center;flex-wrap:wrap;font-size:11px}
+  .chip{display:flex;flex-direction:column;align-items:center;gap:1px;font-size:10px;line-height:1.1}
+  .chip i{width:14px;height:14px;border-radius:50%;display:block}
+  .chip.row{flex-direction:row;gap:5px;font-size:11px}
+  #gradbar{width:150px;height:8px;border-radius:4px}
+  #source{font-size:11.5px;color:#3d343f;max-width:min(60ch,100%)}
+  .badge{display:inline-block;font-size:.66rem;font-weight:700;letter-spacing:.05em;border-radius:5px;padding:0 6px;margin-right:6px}
+  .badge.demo{background:#ffe9b8;color:#6a4300}.badge.est{background:#d9ecff;color:#0b4a82}.badge.na{background:#f3d6d6;color:#7a1d1d}
+  #chapters{position:absolute;left:0;right:0;bottom:0;height:22px;pointer-events:none;font-size:10px;color:#4a423c}
+  #chapters span{position:absolute;bottom:6px;transform:translateX(-50%);background:#faf8f5b0;border-radius:6px;padding:0 6px}
+  #chapters i{position:absolute;bottom:0;width:1px;height:12px;background:#4a423c}
+  #ref{position:absolute;inset:0;background:var(--paper);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;z-index:2}
+  #ref img{max-width:100%;max-height:calc(100% - 28px);object-fit:contain;border:1px solid var(--line)}
+  #ref b{font-size:.8rem;color:#7a1d1d;background:#f3d6d6;border-radius:6px;padding:2px 8px}
+  #bar{position:fixed;left:0;right:0;bottom:0;height:var(--bar);flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;display:flex;align-items:center;gap:8px;padding:5px 12px;background:#faf8f5f2;border-top:1px solid var(--line)}
+  button,select{border:1px solid var(--line);border-radius:7px;background:#fff;padding:4px 9px;cursor:pointer}
+  button:hover:not(:disabled){background:#f1ece5}
+  button:disabled{opacity:.4;cursor:default}
+  #play{width:30px;height:30px;border-radius:50%;padding:0;background:var(--ink);color:#fff;border-color:var(--ink);font-size:0}
+  #play::before{font-size:12px;content:"\25B6"}
+  #play.playing::before{content:"\275A\275A";letter-spacing:-2px}
+  #play:disabled{opacity:.6;cursor:wait}
+  .title{font:italic normal 1.25rem/1 "Instrument Serif",Georgia,serif;white-space:nowrap}
+  #seek{flex:0 0 180px;width:180px;accent-color:#382343}
+  #clock{font-variant-numeric:tabular-nums;color:#6b625a;white-space:nowrap;width:96px;text-align:right}
+  #triggers{display:flex;border:0;margin:0 auto;padding:0;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+  #triggers label{padding:4px 10px;cursor:pointer;border-right:1px solid var(--line);white-space:nowrap}
+  #triggers label:last-child{border-right:0}
+  #triggers label:hover{background:#f1ece5}
+  #triggers label:has(:checked){background:#e5dfd6;box-shadow:inset 0 -2px 0 var(--ink)}
+  #modeWrap{white-space:nowrap}
+  #moreWrap{position:static}
+  #more{position:fixed;right:12px;bottom:calc(var(--bar) + 8px);display:flex;flex-direction:column;gap:5px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px;box-shadow:0 6px 24px #2516302a;min-width:190px;z-index:5}
+  #more #track{font-size:.8rem;color:#6b625a;max-width:26ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #more .note{font-style:italic;font-size:.75rem;color:#6b625a}
+  #bar>*{flex-shrink:0}
+  #styleSel{width:160px}#modeSel{width:140px}
+  @media (max-width:1500px){.title{display:none}}
+  @media (max-width:1380px){#seek{flex-basis:120px;width:120px}#triggers label{padding:4px 7px}}
+  @media (max-width:1180px){#clock{display:none}}
+</style>
+<main>
+  <canvas id="cv" role="img" aria-label="Painting made from the music"></canvas>
+  <div id="hud"><div id="legend"></div><div id="source" hidden></div></div>
+  <div id="chapters" hidden><i style="left:33.3%"></i><i style="left:66.6%"></i><span style="left:16.6%">Beginning</span><span style="left:50%">Middle</span><span style="left:83.3%">Ending</span></div>
+  <div id="ref" hidden><b>DESIGN REFERENCE, NOT THE APP</b><img id="refimg" alt="Design reference still"></div>
+</main>
+<div id="lead" hidden><span id="description"></span><small id="subnote"></small></div>
+<footer id="bar" aria-label="Playback and controls">
+  <button type="button" id="play" aria-label="Play">Play demo</button>
+  <span class="title">The Sound of Color</span>
+  <input type="range" id="seek" min="0" max="1000" value="0" aria-label="Song position">
+  <span id="clock">0:00</span>
+  <fieldset id="triggers" aria-label="What drives the artwork">
+    <label><input type="radio" name="trigger" value="notes" checked>Notes</label>
+    <label><input type="radio" name="trigger" value="pitch">Pitch</label>
+    <label><input type="radio" name="trigger" value="instruments">Instruments</label>
+    <label><input type="radio" name="trigger" value="harmony">Harmony</label>
+    <label><input type="radio" name="trigger" value="whole">Whole Song</label>
+  </fieldset>
+  <span id="modeWrap"><select id="modeSel" aria-label="Ink behavior"><option value="fade">Fade with music</option><option value="paint">Build a painting</option></select></span>
+  <select id="styleSel" aria-label="Visual style"><option value="wc">Layered Watercolor</option><option value="ink">Ink Clouds</option><option value="sh" selected>Musical Shapes</option></select>
+  <button type="button" id="choose">Upload song</button>
+  <button type="button" id="snapshot" title="Download a PNG of the artwork right now. The music keeps playing.">Snapshot</button>
+  <button type="button" id="save" disabled>Save painting</button>
+  <span id="moreWrap"><button type="button" id="moreBtn" aria-expanded="false" aria-label="More">&#8943;</button>
+    <div id="more" hidden>
+      <span id="track">18-second demo</span>
+      <button type="button" id="demo" disabled>Use demo</button>
+      <button type="button" id="restart" hidden>Start over</button>
+      <button type="button" id="mute" aria-pressed="false">Mute</button>
+      <button type="button" id="refbtn" aria-pressed="false">Design reference</button>
+      <span class="note" id="foot">Local preview</span>
+    </div></span>
+  <span class="sr-only" id="status" role="status"></span>
+  <input type="file" id="file" accept="audio/*,.mp3,.wav,.m4a,.ogg,.flac" hidden>
+  <audio id="audio" preload="metadata"></audio>
+</footer>
+<script>
+(() => {
+const $=id=>document.getElementById(id);
+const cv=$('cv'), g=cv.getContext('2d'), audio=$('audio');
+let W=0,H=0,DPR=1;
+const NOTE=['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
+const clamp=(x,a=0,b=1)=>Math.max(a,Math.min(b,x));
+const sstep=(a,b,x)=>{x=clamp((x-a)/(b-a));return x*x*(3-2*x)};
+const rnd=(a=1,b)=>b===undefined?Math.random()*a:a+Math.random()*(b-a);
+
+/* ---------- color: pitch class -> hue, walking the circle of fifths so related notes sit side by side ---------- */
+const hueOf=pc=>((pc*7)%12)*30;
+/* v = vividness 0..1. Low v gives a greyed, dull pigment; high v gives full neon. */
+function vivid(n,F){return clamp(n.s*.55+F.bright*.35+F.energy*.25+(n.midi>72?.1:0)-(n.midi<50?.28:0))}
+const yOf=m=>H*(.93-.86*clamp((m-36)/60));
+
+/* ---------- canvas ---------- */
+const INK_CPU={
+  surface:document.createElement('canvas'),drops:[],time:0,lastDrop:0,quiet:0,
+  init(){
+    const cell=Math.max(3,Math.sqrt(W*H/29000));
+    this.cols=Math.max(8,Math.round(W/cell));
+    this.rows=Math.max(8,Math.round(H/cell));
+    const {cols,rows}=this;
+    this.surface.width=cols;this.surface.height=rows;
+    this.ctx=this.surface.getContext('2d');
+    this.pixels=this.ctx.createImageData(cols,rows);
+    const field=()=>new Float32Array(cols*rows);
+    this.u=field();this.v=field();this.uNext=field();this.vNext=field();
+    this.pressure=field();this.divergence=field();this.curl=field();
+    this.dye=[field(),field(),field()];this.dyeNext=[field(),field(),field()];
+    this.reverse=field();
+    this.drops=[];this.time=0;this.lastDrop=-2;this.quiet=0;this.wet=false;
+    this.draw();
+  },
+  release(x,y,hue,strength=1,delay=0){
+    this.drops.push({x:clamp(x,.01,.99)*this.cols,y:clamp(y,.015,.94)*this.rows,
+      hue,strength,age:-delay,fall:.48,side:x<.5?1:-1});
+    this.lastDrop=this.time;
+    this.quiet=0;this.wet=true;
+  },
+  frame(F){
+    if(!F||F.energy<.035||this.time-this.lastDrop<(F.onset?.28:.48))return;
+    const notes=F.notes.filter(n=>n.s>.22).slice(0,4);
+    for(const [i,note] of notes.entries()){
+      this.release(LAYOUT.x==null?rnd(.03,.97):clamp(LAYOUT.x+rnd(-LAYOUT.xs,LAYOUT.xs),.03,.97),clamp(yOf(note.midi)/H,.08,.85),
+        hueOf(note.pc),.8+note.s*.75+F.energy*.5,i*.08);
+    }
+  },
+  deposit(drop,dt){
+    const {cols,rows,u,v,dye}=this;
+    const age=drop.age-drop.fall;
+    const progress=clamp(age/.76);
+    const fade=Math.sin(Math.PI*(.17+.83*progress));
+    const scale=Math.min(cols,rows);
+    const r=Math.max(2.8,scale*(.047+.039*progress)*drop.strength);
+    const x=drop.x+drop.side*(progress*r*.91+Math.sin(progress*8.1)*r*.24);
+    const y=drop.y+progress*scale*.14;
+    const h=drop.hue/60;
+    const k=n=>(n+h)%6;
+    const rgb=[5,3,1].map(n=>.96-.84*Math.max(0,Math.min(k(n),4-k(n),1)));
+    for(let j=Math.max(1,Math.floor(y-r*2));j<Math.min(rows-1,y+r*2);j++){
+      for(let i=Math.max(1,Math.floor(x-r*2));i<Math.min(cols-1,x+r*2);i++){
+        const dx=(i-x)/r,dy=(j-y)/r,d=dx*dx+dy*dy;
+        if(d>4)continue;
+        const p=i+j*cols,weight=Math.exp(-2.3*d)*fade;
+        const amount=weight*dt*10*drop.strength;
+        for(let c=0;c<3;c++)dye[c][p]=Math.min(4,dye[c][p]+amount*(1-rgb[c]));
+        const ring=Math.exp(-.89*d)*fade;
+        u[p]+=(drop.side*.19+dx*.41-dy*.45*drop.side)*ring*dt*21;
+        v[p]+=(.65+dx*.46*drop.side+dy*.17)*ring*dt*19;
+      }
+    }
+  },
+  advect(source,target,loss,direction=1){
+    const {cols,rows,u,v}=this;
+    for(let y=1;y<rows-1;y++)for(let x=1;x<cols-1;x++){
+      const p=x+y*cols;
+      const bx=clamp(x-u[p]*direction*.28,.5,cols-1.5),by=clamp(y-v[p]*direction*.28,.5,rows-1.5);
+      const ix=Math.floor(bx),iy=Math.floor(by),fx=bx-ix,fy=by-iy,b=ix+iy*cols;
+      const a=source[b]+(source[b+1]-source[b])*fx;
+      const c=source[b+cols]+(source[b+cols+1]-source[b+cols])*fx;
+      target[p]=(a+(c-a)*fy)*loss;
+    }
+  },
+  movePigment(source,target){
+    const {cols,rows,u,v,reverse}=this;
+    this.advect(source,target,1);
+    this.advect(target,reverse,1,-1);
+    // Recover detail lost during interpolation without adding new color peaks.
+    for(let y=1;y<rows-1;y++)for(let x=1;x<cols-1;x++){
+      const p=x+y*cols;
+      const bx=Math.floor(clamp(x-u[p]*.28,.5,cols-1.5));
+      const by=Math.floor(clamp(y-v[p]*.28,.5,rows-1.5));
+      const i=bx+by*cols;
+      const a=source[i],b=source[i+1],c=source[i+cols],d=source[i+cols+1];
+      target[p]=clamp(target[p]+.5*(source[p]-reverse[p]),
+        Math.min(a,b,c,d),Math.max(a,b,c,d))*this.pigmentKeep;
+    }
+  },
+  moveWater(){
+    const {cols,rows,u,v,pressure,divergence,curl,dye}=this;
+    for(let y=1;y<rows-1;y++)for(let x=1;x<cols-1;x++){
+      const i=x+y*cols;
+      curl[i]=.5*(v[i+1]-v[i-1]-u[i+cols]+u[i-cols]);
+    }
+    for(let y=1;y<rows-1;y++)for(let x=1;x<cols-1;x++){
+      const i=x+y*cols;
+      const dx=Math.abs(curl[i+1])-Math.abs(curl[i-1]);
+      const dy=Math.abs(curl[i+cols])-Math.abs(curl[i-cols]);
+      const spin=curl[i]*.25/(Math.sqrt(dx*dx+dy*dy)+.001);
+      u[i]=clamp(u[i]+dy*spin,-3,3);
+      v[i]=clamp(v[i]-dx*spin+.017*Math.min(2,dye[0][i]+dye[1][i]+dye[2][i]),-3,3);
+    }
+    this.advect(u,this.uNext,.994);this.advect(v,this.vNext,.994);
+    [this.u,this.uNext]=[this.uNext,u];[this.v,this.vNext]=[this.vNext,v];
+
+    const nextU=this.u,nextV=this.v;
+    pressure.fill(0);
+    for(let y=1;y<rows-1;y++)for(let x=1;x<cols-1;x++){
+      const i=x+y*cols;
+      divergence[i]=.5*(nextU[i+1]-nextU[i-1]+nextV[i+cols]-nextV[i-cols]);
+    }
+    for(let pass=0;pass<9;pass++){
+      for(let y=1;y<rows-1;y++)for(let x=1;x<cols-1;x++){
+        const i=x+y*cols;
+        pressure[i]=(pressure[i-1]+pressure[i+1]+pressure[i-cols]+pressure[i+cols]-divergence[i])*.25;
+      }
+    }
+    for(let y=1;y<rows-1;y++)for(let x=1;x<cols-1;x++){
+      const i=x+y*cols;
+      nextU[i]-=.5*(pressure[i+1]-pressure[i-1]);
+      nextV[i]-=.5*(pressure[i+cols]-pressure[i-cols]);
+    }
+  },
+  step(dt){
+    this.time+=dt;
+    if(!this.wet)return;
+    this.quiet+=dt;
+    for(const drop of this.drops){
+      drop.age+=dt;
+      if(drop.age>=drop.fall)this.deposit(drop,dt);
+    }
+    this.drops=this.drops.filter(drop=>drop.age<drop.fall+.76);
+    this.moveWater();
+    for(let c=0;c<3;c++)this.movePigment(this.dye[c],this.dyeNext[c]);
+    [this.dye,this.dyeNext]=[this.dyeNext,this.dye];
+    if(this.quiet>75){this.wet=false;return}
+    this.draw();
+  },
+  draw(){
+    const {cols,rows,dye,pixels}=this;
+    g.globalCompositeOperation='source-over';
+    g.fillStyle='#fff';g.fillRect(0,0,W,H);
+    if(this.lastDrop<0)return;
+    const data=pixels.data;
+    const [red,green,blue]=dye;
+    for(let i=0;i<red.length;i++){
+      const p=i*4;
+      const density=red[i]+green[i]+blue[i];
+      if(density<.002){
+        data[p]=data[p+1]=data[p+2]=data[p+3]=255;
+        continue;
+      }
+      const up=i>=cols?i-cols:i,left=i%cols?i-1:i;
+      const relief=clamp((density-red[up]-green[up]-blue[up])*.59+
+        (density-red[left]-green[left]-blue[left])*.34,-.21,.18);
+      const light=1+relief*.9;
+      const spread=1.25+Math.min(1,density)*.23;
+      const shade=1-Math.min(.14,density*.05);
+      const transmission=d=>255*Math.exp(-d*spread)*light*shade;
+      data[p]=transmission(red[i]);data[p+1]=transmission(green[i]);data[p+2]=transmission(blue[i]);data[p+3]=255;
+    }
+    this.ctx.putImageData(pixels,0,0);
+    g.imageSmoothingQuality='medium';
+    g.drawImage(this.surface,0,0,W,H);
+    for(const drop of this.drops){
+      if(drop.age<0||drop.age>drop.fall+.22)continue;
+      const x=drop.x/cols*W,y=drop.y/rows*H;
+      const q=clamp(drop.age/drop.fall);
+      if(q<1){
+        const fall=46*(1-q*q),r=3+drop.strength*2.6;
+        g.fillStyle='hsl('+drop.hue+' 86% 46%)';
+        g.beginPath();g.ellipse(x,y-fall,r,r*(1.08+q*.27),0,0,Math.PI*2);g.fill();
+      }else{
+        const spread=clamp((drop.age-drop.fall)/.22);
+        g.strokeStyle='hsl('+drop.hue+' 80% 58% / '+((1-spread)*.47)+')';
+        g.lineWidth=1;
+        g.beginPath();g.ellipse(x,y,5+spread*27,1+spread*5,0,0,Math.PI*2);g.stroke();
+      }
+    }
+  },
+  resize(){
+    if(!this.dye||this.lastDrop<0){this.init();return}
+    const {cols,rows,dye,u,v,drops,time,lastDrop,quiet,wet}=this;
+    this.init();
+    const sx=this.cols/cols,sy=this.rows/rows;
+    for(let y=1;y<this.rows-1;y++)for(let x=1;x<this.cols-1;x++){
+      const to=x+y*this.cols,from=Math.floor(x/sx)+Math.floor(y/sy)*cols;
+      this.u[to]=u[from]*sx;this.v[to]=v[from]*sy;
+      for(let c=0;c<3;c++)this.dye[c][to]=dye[c][from];
+    }
+    for(const drop of drops){drop.x*=sx;drop.y*=sy}
+    Object.assign(this,{drops,time,lastDrop,quiet,wet});
+    this.draw();
+  }
+};
+
+/* Ink in water, Fable experiment. The same idea as the baseline (water motion carries pigment), but run on the
+   graphics card: pigment is tracked at roughly 25 times the baseline's detail, each cloud is poured slowly in
+   uneven pulses so it folds into sheets, and the result is lit as soft, opaque paint clouds on white water.
+   Add ?ink=cpu to the address to force the baseline for comparison. */
+const INK_GL={
+  fps:60,drops:[],swell:[],time:0,lastDrop:-2,quiet:0,wet:false,lost:false,seed:7,key:'',gl:null,P:null,
+  canvas:document.createElement('canvas'),
+  /* tuning: ink poured per frame, push given to fresh ink, how long water keeps moving, how long the push
+     travels with the ink, pigment fade, swirl strength, then four shading controls */
+  look:{size:1.45,ink:.07,swell:2.8,puffT:2,puffGap:.75,thrust:.0003,drift:.0006,drag:.992,carry:.995,fade:.99996,erode:0,curl:.5,fine:.008,broad:.09,crease:1,dense:4.5,pale:.3},
+  recent:[],
+  names:['dye','dye2','tmpA','tmpB','vel','vel2','curl','div','pr','pr2','half','quarter','blurA','blurB'],
+  rand(){let t=this.seed+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296},
+  r(a,b){return a+this.rand()*(b-a)},
+  /* Match the twelve note colors shown in the legend. */
+  tint(h,vividness=.85){
+    const hue=((h%360)+360)%360/60;
+    const light=.47,saturation=.5+.5*clamp(vividness);
+    const amplitude=saturation*Math.min(light,1-light);
+    return [0,8,4].map(offset=>{
+      const k=(offset+hue*2)%12;
+      return light-amplitude*Math.max(-1,Math.min(k-3,9-k,1));
+    });
+  },
+  boot(){
+    try{
+      const gl=this.canvas.getContext('webgl2',{alpha:false,antialias:false,depth:false,stencil:false});
+      if(!gl||!(gl.getExtension('EXT_color_buffer_float')||gl.getExtension('EXT_color_buffer_half_float')))return false;
+      this.gl=gl;this.build();
+      const t=this.target(4,4),ok=gl.checkFramebufferStatus(gl.FRAMEBUFFER)===gl.FRAMEBUFFER_COMPLETE;
+      gl.deleteTexture(t.tex);gl.deleteFramebuffer(t.fbo);
+      if(!ok)return false;
+      this.canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();this.lost=true});
+      this.canvas.addEventListener('webglcontextrestored',()=>{this.lost=false;this.key='';for(const n of this.names)this[n]=null;this.build();this.init()});
+      return true;
+    }catch(e){console.warn('Graphics-card ink is unavailable, using the baseline.',e);return false}
+  },
+  build(){
+    const gl=this.gl;
+    const VS='#version 300 es\nout vec2 vUv;void main(){vec2 p=vec2(float((gl_VertexID<<1)&2),float(gl_VertexID&2));vUv=p;gl_Position=vec4(p*2.-1.,0.,1.);}';
+        const HEAD='#version 300 es\nprecision highp float;precision highp sampler2D;in vec2 vUv;out vec4 o;\n';
+    const NB='uniform vec2 uTexel;\n#define vL (vUv-vec2(uTexel.x,0.))\n#define vR (vUv+vec2(uTexel.x,0.))\n#define vT (vUv+vec2(0.,uTexel.y))\n#define vB (vUv-vec2(0.,uTexel.y))\n';
+    /* read the water's motion averaged over four neighboring cells; this removes a cell-sized zigzag the solver
+       can leave behind, which otherwise shows up as saw-toothed cloud edges */
+    const FLOW='uniform sampler2D uVel;uniform vec2 uScale,uHalf;vec2 flow(){return .25*(texture(uVel,vUv+uHalf).xy+texture(uVel,vUv-uHalf).xy+texture(uVel,vUv+vec2(uHalf.x,-uHalf.y)).xy+texture(uVel,vUv+vec2(-uHalf.x,uHalf.y)).xy);}\n';
+    const sh=(type,src)=>{const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);
+      if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(s));return s};
+    const vs=sh(gl.VERTEX_SHADER,VS);
+    const make=fs=>{const p=gl.createProgram();gl.attachShader(p,vs);gl.attachShader(p,sh(gl.FRAGMENT_SHADER,HEAD+fs));gl.linkProgram(p);
+      if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(p));return {p,u:{}}};
+    this.P={
+      /* carry a field along the water's motion */
+      advect:make(FLOW+'uniform sampler2D uSrc;uniform vec4 uKeep;void main(){o=texture(uSrc,vUv-flow()*uScale)*uKeep;}'),
+      /* pigment only: undo most of the blur that carrying introduces, without inventing new color peaks */
+      mac:make(FLOW+`uniform sampler2D uSrc,uFwd,uBack;uniform float uKeep,uErode;
+        void main(){
+          vec2 c=vUv-flow()*uScale,sz=vec2(textureSize(uSrc,0));
+          ivec2 i=ivec2(floor(c*sz-.5)),z=ivec2(0),m=ivec2(sz)-1;
+          vec4 a=texelFetch(uSrc,clamp(i,z,m),0),b=texelFetch(uSrc,clamp(i+ivec2(1,0),z,m),0),
+               e=texelFetch(uSrc,clamp(i+ivec2(0,1),z,m),0),f=texelFetch(uSrc,clamp(i+1,z,m),0);
+          vec4 v=texture(uFwd,vUv)+.5*(texture(uSrc,vUv)-texture(uBack,vUv));
+          o=clamp(v,min(min(a,b),min(e,f)),max(max(a,b),max(e,f)))*uKeep;
+          o*=min(1.,8./max(.001,o.a));
+          /* fading mode: thin veils melt away first, so a cloud dissolves from its edges inward */
+          o*=max(0.,o.a-uErode)/max(o.a,1e-5);
+        }`),
+      splat:make('uniform vec2 uPoint;uniform float uAspect,uRadius;uniform vec4 uValue;void main(){vec2 d=vUv-uPoint;d.x*=uAspect;o=uValue*exp(-dot(d,d)/(uRadius*uRadius));}'),
+      curl:make(NB+'uniform sampler2D uVel;void main(){o=vec4(.5*(texture(uVel,vR).y-texture(uVel,vL).y-texture(uVel,vT).x+texture(uVel,vB).x));}'),
+      /* strengthen small swirls, and let fresh ink push the water in the direction it was poured */
+      force:make(NB+`uniform sampler2D uVel,uCurl;uniform float uDt,uCurlPush,uTime,uDrift,uAspect;
+        void main(){
+          float l=abs(texture(uCurl,vL).x),r=abs(texture(uCurl,vR).x),t=abs(texture(uCurl,vT).x),b=abs(texture(uCurl,vB).x),c=texture(uCurl,vUv).x;
+          vec2 f=.5*vec2(t-b,r-l);f/=length(f)+1e-6;f*=uCurlPush*c;f.y=-f.y;
+          /* a very slow, ever-changing current keeps the clouds turning over after the pouring stops */
+          const float PI=3.14159265;vec2 q=vUv*PI;
+          float m1=cos(uTime*.05),m2=sin(uTime*.04),m3=.5*sin(uTime*.07+1.);
+          f+=uDrift*vec2(m1*sin(2.*q.x)*cos(q.y)+2.*m2*sin(q.x)*cos(2.*q.y)+2.*m3*sin(3.*q.x)*cos(2.*q.y),
+                         -(2.*m1*cos(2.*q.x)*sin(q.y)+m2*cos(q.x)*sin(2.*q.y)+3.*m3*cos(3.*q.x)*sin(2.*q.y))/uAspect)*PI;
+          vec4 v=texture(uVel,vUv);v.xy=clamp(v.xy+(f+v.zw)*uDt,-1.,1.);o=v;
+        }`),
+      /* the screen edges are walls, so ink stays in view */
+      div:make(NB+`uniform sampler2D uVel;
+        void main(){
+          vec2 c=texture(uVel,vUv).xy;
+          float l=texture(uVel,vL).x,r=texture(uVel,vR).x,t=texture(uVel,vT).y,b=texture(uVel,vB).y;
+          if(vL.x<0.)l=-c.x;if(vR.x>1.)r=-c.x;if(vT.y>1.)t=-c.y;if(vB.y<0.)b=-c.y;
+          o=vec4(.5*(r-l+t-b));
+        }`),
+      pres:make(NB+'uniform sampler2D uPres,uDiv;float pr(vec2 c){return texture(uPres,c).x;}void main(){o=vec4((pr(vL)+pr(vR)+pr(vT)+pr(vB)-texture(uDiv,vUv).x)*.25);}'),
+      grad:make(NB+'uniform sampler2D uVel,uPres;float pr(vec2 c){return texture(uPres,c).x;}void main(){vec4 v=texture(uVel,vUv);v.xy-=.5*vec2(pr(vR)-pr(vL),pr(vT)-pr(vB));o=v;}'),
+      copy:make('uniform sampler2D uSrc;void main(){o=texture(uSrc,vUv);}'),
+      blur:make('uniform sampler2D uSrc;uniform vec2 uStep;void main(){vec4 s=texture(uSrc,vUv);float w=1.;for(int i=1;i<5;i++){float k=exp(-float(i*i)/8.);vec2 d=uStep*float(i);s+=k*(texture(uSrc,vUv+d)+texture(uSrc,vUv-d));w+=2.*k;}o=s/w;}'),
+      /* turn pigment thickness into lit clouds: fine folds and broad billows tilt the surface toward or away from
+         a light at the upper left, creases darken, thin veils stay pale, and a blurred copy sits behind as depth */
+      show:make(`uniform sampler2D uDye,uBlur;uniform vec2 uPx,uBpx;uniform float uRes,uFine,uBroad,uCrease,uDense,uPale;
+        float hgt(float d){return .62*log(1.+2.2*d);}
+        float hash(vec2 p){return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453);}
+        void main(){
+          vec4 D=texture(uDye,vUv),B=texture(uBlur,vUv);
+          vec2 e=uPx*1.5,b=uBpx*2.;
+          vec2 gf=vec2(hgt(texture(uDye,vUv+vec2(e.x,0.)).a)-hgt(texture(uDye,vUv-vec2(e.x,0.)).a),
+                       hgt(texture(uDye,vUv+vec2(0.,e.y)).a)-hgt(texture(uDye,vUv-vec2(0.,e.y)).a))*uRes/3.;
+          vec2 gb=vec2(hgt(texture(uBlur,vUv+vec2(b.x,0.)).a)-hgt(texture(uBlur,vUv-vec2(b.x,0.)).a),
+                       hgt(texture(uBlur,vUv+vec2(0.,b.y)).a)-hgt(texture(uBlur,vUv-vec2(0.,b.y)).a))*uRes/32.;
+          vec3 n=normalize(vec3(-(gf*uFine+gb*uBroad),1.)),L=normalize(vec3(-.5,.62,.6));
+          float crease=clamp((B.a-D.a)*uCrease,-.6,.6);
+          float shade=clamp(smoothstep(-.25,.95,dot(n,L))-crease*.45,0.,1.);
+          vec3 alb=clamp(D.rgb/max(D.a,1e-4),0.,1.);
+          vec3 body=mix(alb*mix(vec3(1.),alb,.75)*.86,mix(alb,vec3(1.),uPale),shade);
+          body+=pow(max(dot(n,normalize(L+vec3(0.,0.,1.))),0.),30.)*.1;
+          vec3 back=mix(clamp(B.rgb/max(B.a,1e-4),0.,1.),vec3(1.),.2);
+          vec3 col=mix(vec3(1.),back,(1.-exp(-2.*B.a))*.7);
+          col=mix(col,body,1.-exp(-uDense*D.a));
+          o=vec4(col+(hash(gl_FragCoord.xy)-.5)/255.,1.);
+        }`)
+    };
+  },
+  target(w,h){
+    const gl=this.gl,tex=gl.createTexture(),fbo=gl.createFramebuffer();
+    gl.bindTexture(gl.TEXTURE_2D,tex);
+    for(const [k,v] of [[gl.TEXTURE_MIN_FILTER,gl.LINEAR],[gl.TEXTURE_MAG_FILTER,gl.LINEAR],[gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE],[gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE]])gl.texParameteri(gl.TEXTURE_2D,k,v);
+    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA16F,w,h,0,gl.RGBA,gl.HALF_FLOAT,null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER,fbo);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,tex,0);
+    gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);
+    return {tex,fbo,w,h};
+  },
+  run(p,to,u){
+    const gl=this.gl;gl.useProgram(p.p);let unit=0;
+    for(const k in u){
+      if(!(k in p.u))p.u[k]=gl.getUniformLocation(p.p,k);
+      const l=p.u[k],v=u[k];if(l===null)continue;
+      if(v.tex){gl.activeTexture(gl.TEXTURE0+unit);gl.bindTexture(gl.TEXTURE_2D,v.tex);gl.uniform1i(l,unit++)}
+      else if(v.length===2)gl.uniform2f(l,v[0],v[1]);
+      else if(v.length===4)gl.uniform4f(l,v[0],v[1],v[2],v[3]);
+      else gl.uniform1f(l,v);
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER,to?to.fbo:null);
+    gl.viewport(0,0,to?to.w:this.canvas.width,to?to.h:this.canvas.height);
+    gl.drawArrays(gl.TRIANGLES,0,3);
+  },
+  flip(n){const m=n+'2';[this[n],this[m]]=[this[m],this[n]]},
+  /* add a soft round dab of something (pigment or push) at one place; r is a fraction of the screen height */
+  splat(to,x,y,r,value){
+    const gl=this.gl,rx=r*3/this.aspect,ry=r*3;
+    gl.enable(gl.BLEND);gl.blendFunc(gl.ONE,gl.ONE);gl.enable(gl.SCISSOR_TEST);
+    gl.scissor(Math.floor((x-rx)*to.w),Math.floor((y-ry)*to.h),Math.ceil(2*rx*to.w)+1,Math.ceil(2*ry*to.h)+1);
+    this.run(this.P.splat,to,{uPoint:[x,y],uAspect:this.aspect,uRadius:r,uValue:value});
+    gl.disable(gl.BLEND);gl.disable(gl.SCISSOR_TEST);
+  },
+  init(){
+    const gl=this.gl;this.aspect=W/H||1;
+    this.drops=[];this.recent=[];this.time=0;this.lastDrop=-2;this.quiet=0;this.wet=false;
+    /* a hidden or zero-size window has nothing to draw on; wait for the next resize */
+    if(this.lost||!W||!H){this.draw();return}
+    const k=Math.min(1,1920/Math.max(cv.width,cv.height)),cw=Math.round(cv.width*k),ch=Math.round(cv.height*k);
+    const ds=Math.min(1,1280/Math.max(cw,ch)),dw=Math.round(cw*ds),dh=Math.round(ch*ds);
+    const ss=320/Math.max(W,H),sw=Math.max(32,Math.round(W*ss)),shh=Math.max(32,Math.round(H*ss));
+    const key=[cw,ch,dw,dh,sw,shh].join();
+    if(key!==this.key){
+      this.key=key;this.canvas.width=cw;this.canvas.height=ch;
+      for(const n of this.names){const t=this[n];if(t){gl.deleteTexture(t.tex);gl.deleteFramebuffer(t.fbo)}}
+      const size={dye:[dw,dh],dye2:[dw,dh],tmpA:[dw,dh],tmpB:[dw,dh],half:[dw>>1,dh>>1],quarter:[dw>>2,dh>>2],blurA:[dw>>3,dh>>3],blurB:[dw>>3,dh>>3]};
+      for(const n of this.names){const s=size[n]||[sw,shh];this[n]=this.target(Math.max(2,s[0]),Math.max(2,s[1]))}
+    }else for(const n of this.names){gl.bindFramebuffer(gl.FRAMEBUFFER,this[n].fbo);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT)}
+    this.draw();
+  },
+  /* one cloud: x and y are 0..1 from the top left, angle is the pour direction in radians away from straight down */
+  release(x,y,hue,strength=1,delay=0,angle,vividness=.85){
+    if(angle===undefined)angle=this.r(-2.3,2.3);
+    /* a cloud is a short series of puffs. Each puff starts a little further out along a spiral and inflates on
+       its own, pressing against the ones before it, so the cloud grows as a cluster of rounded folds */
+    const K=this.look,rd=(.026+.017*strength)*K.size,n=Math.round(3+2*strength),ph=this.r(0,6.283),turn=this.rand()<.5?2.4:-2.4,puffs=[];
+    for(let i=0;i<n;i++){
+      const a=ph+i*turn,m=i?rd*.46*Math.sqrt(i)*this.r(.8,1.15):0;
+      puffs.push({t:i*K.puffGap*this.r(.85,1.15),ox:Math.cos(a)*m,oy:Math.sin(a)*m,shade:this.r(.8,1.12),big:this.r(.75,1.25)});
+    }
+    this.drops.push({x:clamp(x,.02,.98),y:1-clamp(y,.02,.98),hue,vividness,strength,age:-delay,life:puffs[n-1].t+K.puffT,
+      dx:Math.sin(angle),dy:-Math.cos(angle),ph,rd,puffs});
+    if(this.drops.length>28)this.drops.shift();
+    this.lastDrop=this.time;this.quiet=0;this.wet=true;
+  },
+  /* "Drop ink": a handful of new clouds spread across the width */
+  frame(F){
+    if(!F||F.energy<.035)return;
+    const live=this.drops.length,gap=(F.onset?.35:.85)*(1+live/12);
+    if(live>=18||this.time-this.lastDrop<gap)return;
+    const notes=F.notes.filter(n=>n.s>.22).slice(0,Math.min(4,18-live));
+    if(!notes.length)return;
+    for(const [i,note] of notes.entries()){
+      /* pitch still suggests the height, but each new cloud takes the emptiest of a few candidate spots */
+      const [x,y]=this.place(yOf(note.midi)/H);
+      const strength=.8+note.s*.75+F.energy*.5;
+      this.release(x,y,hueOf(note.pc),strength,i*.08,undefined,note.v);
+    }
+  },
+  place(hint){
+    let best=[.5,.5],score=-1;
+    for(let k=0;k<6;k++){
+      const x=LAYOUT.x==null?this.r(.07,.93):clamp(LAYOUT.x+this.r(-LAYOUT.xs,LAYOUT.xs),.05,.95),y=clamp(hint+this.r(-.32,.32)*LAYOUT.band,.1,.86);let near=9;
+      for(const p of this.recent){const dx=(x-p[0])*this.aspect,dy=y-p[1];near=Math.min(near,dx*dx+dy*dy)}
+      if(near>score){score=near;best=[x,y]}
+    }
+    this.recent.push(best);if(this.recent.length>12)this.recent.shift();
+    return best;
+  },
+  /* pour one cloud for one frame: a gentle push, plus each active puff adding pigment and volume at its own spot */
+  emit(d){
+    const K=this.look,A=this.aspect,q=d.age/d.life,rd=d.rd,go=.05*d.strength*q,cx=d.x+d.dx*go/A,cy=d.y+d.dy*go;
+    const env=sstep(0,.1,q)*(1-sstep(.7,1,q)),t=this.tint(d.hue,d.vividness);
+    this.splat(this.vel,cx,cy,rd*1.6,[0,0,d.dx*K.thrust*env,d.dy*K.thrust*env]);
+    for(const p of d.puffs){
+      const u=(d.age-p.t)/K.puffT;if(u<0||u>=1)continue;
+      const e=sstep(0,.15,u)*(1-sstep(.7,1,u)),x=cx+p.ox/A+this.r(-.04,.04)*rd/A,y=cy+p.oy+this.r(-.04,.04)*rd;
+      /* pigment gets thicker as the puff inflates, so each fold ends up domed: thin at its rim, rich at its heart */
+      const amt=K.ink*e*(.4+.9*u)*this.r(.7,1.3),w=p.shade;
+      this.splat(this.dye,x,y,rd*.3,[t[0]*w*amt,t[1]*w*amt,t[2]*w*amt,amt]);
+      this.swell.push([x,y,rd*.32,-K.swell*e*p.big/this.vel.h]);
+    }
+  },
+  step(){
+    const dt=1/60;this.time+=dt;
+    if(!this.wet||this.lost||!this.dye)return;
+    this.quiet+=dt;
+    const P=this.P,K=this.look,sc=[dt/this.aspect,dt],one=[1,1,1,1];
+    this.swell=[];
+    for(const d of this.drops){d.age+=dt;if(d.age>=0){this.emit(d);this.quiet=0}}
+    this.drops=this.drops.filter(d=>d.age<d.life);
+    const tx=[1/this.vel.w,1/this.vel.h],hf=[.5*tx[0],.5*tx[1]];
+    this.run(P.curl,this.curl,{uVel:this.vel,uTexel:tx});
+    this.run(P.force,this.vel2,{uVel:this.vel,uCurl:this.curl,uTexel:tx,uDt:dt,uCurlPush:K.curl,uTime:this.time,uDrift:K.drift,uAspect:this.aspect});this.flip('vel');
+    /* keep the water incompressible, which is what makes it roll and curl instead of piling up */
+    this.run(P.div,this.div,{uVel:this.vel,uTexel:tx});
+    /* swelling clouds need room: the same amount of clear water is drawn off evenly across the whole screen */
+    let room=0;
+    for(const w of this.swell){this.splat(this.div,w[0],w[1],w[2],[w[3],0,0,0]);room-=w[3]*Math.PI*w[2]*w[2]/this.aspect}
+    if(room)this.splat(this.div,.5,.5,1e3,[room,0,0,0]);
+    for(let i=0;i<18;i++){this.run(P.pres,this.pr2,{uPres:this.pr,uDiv:this.div,uTexel:tx});this.flip('pr')}
+    this.run(P.grad,this.vel2,{uVel:this.vel,uPres:this.pr,uTexel:tx});this.flip('vel');
+    this.run(P.advect,this.vel2,{uVel:this.vel,uSrc:this.vel,uScale:sc,uHalf:hf,uKeep:[K.drag,K.drag,K.carry,K.carry]});this.flip('vel');
+    this.run(P.advect,this.tmpA,{uVel:this.vel,uSrc:this.dye,uScale:sc,uHalf:hf,uKeep:one});
+    this.run(P.advect,this.tmpB,{uVel:this.vel,uSrc:this.tmpA,uScale:[-sc[0],-sc[1]],uHalf:hf,uKeep:one});
+    this.run(P.mac,this.dye2,{uVel:this.vel,uSrc:this.dye,uFwd:this.tmpA,uBack:this.tmpB,uScale:sc,uHalf:hf,uKeep:K.fade,uErode:K.erode});this.flip('dye');
+    if(this.quiet>90){this.wet=false;return}
+    this.draw();
+  },
+  draw(){
+    g.globalCompositeOperation='source-over';
+    if(this.lastDrop<0||this.lost||!this.dye||!this.canvas.width||!this.canvas.height){g.fillStyle='#fff';g.fillRect(0,0,W,H);return}
+    const P=this.P,K=this.look,d=this.dye,b=this.blurB;
+    this.run(P.copy,this.half,{uSrc:d});
+    this.run(P.copy,this.quarter,{uSrc:this.half});
+    this.run(P.blur,this.blurA,{uSrc:this.quarter,uStep:[1/this.blurA.w,0]});
+    this.run(P.blur,b,{uSrc:this.blurA,uStep:[0,1/b.h]});
+    this.run(P.show,null,{uDye:d,uBlur:b,uPx:[1/d.w,1/d.h],uBpx:[1/b.w,1/b.h],uRes:d.h,uFine:K.fine,uBroad:K.broad,uCrease:K.crease,uDense:K.dense,uPale:K.pale});
+    g.imageSmoothingQuality='medium';
+    g.drawImage(this.canvas,0,0,W,H);
+  },
+  /* keep the picture when the window changes shape */
+  resize(){
+    if(this.lastDrop<0||this.lost||!this.dye){this.init();return}
+    const old=[this.dye,this.vel],keep={drops:this.drops,time:this.time,lastDrop:this.lastDrop,quiet:this.quiet,wet:this.wet};
+    this.dye=this.vel=null;this.key='';this.init();
+    this.run(this.P.copy,this.dye,{uSrc:old[0]});this.run(this.P.copy,this.vel,{uSrc:old[1]});
+    for(const t of old){this.gl.deleteTexture(t.tex);this.gl.deleteFramebuffer(t.fbo)}
+    Object.assign(this,keep);this.draw();
+  }
+};
+const INK=(!/[?&]ink=cpu\b/.test(location.search)&&INK_GL.boot())?INK_GL:INK_CPU;
+
+for(const ink of [INK_GL,INK_CPU])ink.idle=function(){return !this.drops.length&&this.quiet>10};
+
+/* ---------- watercolor helpers and renderer, carried over from the main app ---------- */
+function paint(pc,v,a,paper,dl){
+  const k=sstep(.3,.7,v), s=48+52*k;
+  const l=(paper?60-8*k:33+27*k)+(dl||0);
+  return 'hsla('+hueOf(pc)+','+s.toFixed(0)+'%,'+l.toFixed(0)+'%,'+a+')';
+}
+function blob(x,y,r,pts,j){
+  const n=pts.length,P=[];
+  for(let k=0;k<n;k++){const a=k/n*6.2832,rr=r*pts[k]*(1+(Math.random()-.5)*j);P.push(x+Math.cos(a)*rr,y+Math.sin(a)*rr*.88)}
+  g.beginPath();g.moveTo((P[2*n-2]+P[0])/2,(P[2*n-1]+P[1])/2);
+  for(let k=0;k<n;k++){const m=(k+1)%n;g.quadraticCurveTo(P[2*k],P[2*k+1],(P[2*k]+P[2*m])/2,(P[2*k+1]+P[2*m+1])/2)}
+  g.closePath();
+}
+
+
+/* ---------- style 1: watercolor. Translucent glazes layered on cold-press paper; each wash spreads softly, pools pigment at its edge as it dries, and sometimes blooms ---------- */
+const WC={fps:60,blooms:[],tick:0,cov:null,
+  step(){},resize(){},idle(){return true},
+  init(){
+    g.globalCompositeOperation='source-over';
+    const paper=g.createLinearGradient(0,0,W,H);
+    paper.addColorStop(0,'#fffdf8');paper.addColorStop(1,'#f6efe1');
+    g.fillStyle=paper;g.fillRect(0,0,W,H);
+    /* cold-press tooth: faint soft blotches and a fine speckle */
+    for(let i=0;i<90;i++){const x=rnd(W),y=rnd(H),r=rnd(20,90),c=Math.random()<.5?'120,100,70':'255,252,244',rg=g.createRadialGradient(x,y,0,x,y,r);
+      rg.addColorStop(0,'rgba('+c+','+rnd(.015,.035).toFixed(3)+')');rg.addColorStop(1,'rgba('+c+',0)');g.fillStyle=rg;g.fillRect(x-r,y-r,r*2,r*2)}
+    for(let i=0;i<W*H/220;i++){g.fillStyle='rgba(110,90,60,'+rnd(.02,.06).toFixed(3)+')';g.fillRect(rnd(W),rnd(H),1,1)}
+    this.blooms=[];this.tick=0;this.cov=new Float32Array(40);
+  },
+  cell(x,y){return clamp((x/W*8)|0,0,7)+8*clamp((y/H*5)|0,0,4)},
+  frame(F){
+    ++this.tick;
+    if(this.tick%30===0)for(let i=0;i<40;i++)this.cov[i]*=LAYOUT.tight?.99:.9;
+    for(const n of F.notes){
+      const p=F.onset?n.s*.5:n.s*.035*(.4+F.energy);
+      if(Math.random()<p&&this.blooms.length<60)this.spawn(n,F);
+    }
+    for(let i=this.blooms.length-1;i>=0;i--){
+      const b=this.blooms[i],q=b.age/b.life,r=b.R*(.3+.7*Math.sqrt(q)),a=.028*(1-q)+.006;
+      b.x+=b.dx;b.y+=b.dy;b.dx*=.995;b.dy*=.995;
+      /* one or two glazes per wash; the second is offset and may carry a neighboring hue, like wet-in-wet */
+      for(let k=0;k<b.L.length;k++){const l=b.L[k],rr=r*l.s,x=b.x+l.ox*r,y=b.y+l.oy*r,al=a*l.a;
+        const wash=g.createRadialGradient(x,y,rr*.1,x,y,rr*1.2);
+        wash.addColorStop(0,paint(l.pc,b.v,al*.55,true,12));
+        wash.addColorStop(.6,paint(l.pc,b.v,al*.95,true,2));
+        wash.addColorStop(.86,paint(l.pc,b.v,al*1.5,true,-12));
+        wash.addColorStop(1,paint(l.pc,b.v,0,true));
+        blob(x,y,rr,l.pts,.012);g.fillStyle=wash;g.fill();
+        if(b.age%9===k*4){g.lineWidth=rnd(.5,1.1);g.strokeStyle=paint(l.pc,b.v,al*.6,true,-18);g.stroke()}
+      }
+      /* a back-run: a drop of water pushes pigment outward and leaves a frilled edge */
+      if(b.bl&&b.age===b.blAt){const br=r*rnd(.25,.45),bx=b.x+rnd(-.3,.3)*r,by=b.y+rnd(-.3,.3)*r,pts=[];
+        for(let k=0;k<22;k++)pts.push(.88+Math.random()*.24);
+        const rg=g.createRadialGradient(bx,by,0,bx,by,br);rg.addColorStop(0,'rgba(255,249,236,.24)');rg.addColorStop(.8,'rgba(255,249,236,.1)');rg.addColorStop(1,'rgba(255,249,236,0)');
+        blob(bx,by,br,pts,.08);g.fillStyle=rg;g.fill();g.lineWidth=.8;g.strokeStyle=paint(b.pc,b.v,.14,true,-20);g.stroke()}
+      /* granulation settles in the middle of the wash */
+      if(b.age===b.life>>1){g.fillStyle=paint(b.pc,b.v,.1,true,-22);
+        for(let k=0;k<14;k++){const an=rnd(6.2832),d=r*.8*Math.sqrt(Math.random());g.fillRect(b.x+Math.cos(an)*d,b.y+Math.sin(an)*d,rnd(.8,1.8),rnd(.8,1.8))}}
+      /* as it dries, pigment pools into a fine dark edge */
+      if(++b.age>b.life){blob(b.x,b.y,r,b.L[0].pts,.01);g.lineWidth=1.5;g.strokeStyle=paint(b.pc,b.v,.4,true,-24);g.stroke();this.blooms.splice(i,1)}
+    }
+  },
+  spawn(n,F){
+    const M=Math.min(W,H),c=this.cov;let bx=0,by=0,best=1e9;
+    /* try a few places at this note's height and take the least painted one, so the page fills evenly; a cell that is already full is left to breathe */
+    for(let t=0;t<4;t++){const x=LAYOUT.x==null?rnd(W*.02,W*.98):clamp(W*(LAYOUT.x+rnd(-LAYOUT.xs,LAYOUT.xs)),W*.02,W*.98),y=clamp(yOf(n.midi)+rnd(-.24,.24)*LAYOUT.band*H,H*.05,H*.95),s=c[this.cell(x,y)]+Math.random()*.3;if(s<best){best=s;bx=x;by=y}}
+    if(best>(LAYOUT.tight?.75:2.4))return;
+    const R=M*(.05+.17*n.s*(.5+F.energy))*(n.midi<52?1.6:1)*LAYOUT.size;c[this.cell(bx,by)]+=R/M*6;
+    const L=[],nl=Math.random()<.45?2:1;
+    for(let k=0;k<nl;k++){const pts=[];for(let j=0;j<18;j++)pts.push(.7+Math.random()*.6);
+      L.push({pts,s:k?rnd(.55,.85):1,ox:k?rnd(-.35,.35):0,oy:k?rnd(-.3,.3):0,a:k?.75:1,pc:k&&Math.random()<.35?(n.pc+(Math.random()<.5?7:5))%12:n.pc})}
+    const life=(70+rnd(80))|0;
+    this.blooms.push({x:bx,y:by,pc:n.pc,v:n.v,age:0,life,pts:L[0].pts,R,L,dx:rnd(-.15,.15),dy:rnd(0,.18),bl:Math.random()<.3,blAt:(life*rnd(.45,.75))|0});
+  }
+};
+
+/* ---------- musical shapes. Each attack places a clear form: color from the note, height from pitch, size from
+   strength. A playhead walks left to right so a phrase reads like a line of music, and every form thins out and
+   spreads over a few seconds so the next phrase is easy to follow ---------- */
+const SH={fps:60,list:[],t:0,last:-9,
+  init(){this.list=[];this.t=0;this.last=-9;this.draw()},
+  resize(){this.draw()},
+  idle(){return !this.list.length},
+  frame(F){
+    if(!F||F.energy<.035||this.t-this.last<(F.onset?.3:.8))return;
+    const notes=F.notes.filter(n=>n.s>.22).slice(0,4);if(!notes.length)return;
+    this.last=this.t;
+    const M=Math.min(W,H),px=LAYOUT.x!=null?W*LAYOUT.x:W*(.1+.8*((this.t/9)%1));
+    notes.forEach((n,i)=>{
+      const lead=i===0,kind=lead?'ring':(i===3||n.midi>76)?'tick':'disc';
+      this.list.push({x:px+rnd(-.035,.035)*W+i*W*.028,y:clamp(yOf(n.midi)+rnd(-.03,.03)*H,H*.16,H*.86),
+        r:Math.min(M*.38,M*(lead?.14:.07)+M*.2*n.s*(.5+F.energy)),name:n.label||NOTE[n.pc],hue:hueOf(n.pc),sat:72+28*n.v,kind,lead,age:LAYOUT.hold?.5:0,life:lead?10:8});
+      for(let k=0;k<2;k++)this.list.push({x:px+rnd(-.14,.14)*W,y:clamp(yOf(n.midi)+rnd(-.2,.2)*H,H*.08,H*.92),r:M*rnd(.04,.12),hue:hueOf(n.pc),sat:72+28*n.v,kind:'tick',lead:false,age:LAYOUT.hold?.5:0,life:7});
+    });
+    if(this.list.length>(LAYOUT.hold?600:200))this.list.splice(0,this.list.length-(LAYOUT.hold?600:200));
+  },
+  step(){this.t+=1/60;if(!LAYOUT.hold){for(const s of this.list)s.age+=1/60;this.list=this.list.filter(s=>s.age<s.life)}this.draw()},
+  draw(){
+    g.globalCompositeOperation='source-over';g.fillStyle='#fbf9f5';g.fillRect(0,0,W,H);
+    const col=(s,l,a)=>'hsla('+s.hue+','+s.sat.toFixed(0)+'%,'+l+'%,'+a.toFixed(3)+')';
+    const fade=s=>LAYOUT.hold?.8:Math.pow(1-s.age/s.life,1.5),pop=s=>.6+.4*sstep(0,.25,s.age);
+    /* soft fields first; overlapping colors mix the way stacked tissue paper does */
+    g.globalCompositeOperation='multiply';
+    for(const s of this.list){
+      if(s.kind==='tick')continue;
+      const a=fade(s),r=s.r*pop(s)*(1+.3*s.age/s.life);
+      g.fillStyle=col(s,60,(s.lead?.45:.36)*a);g.beginPath();g.arc(s.x,s.y,r*(s.lead?1.25:1),0,6.2832);g.fill();
+    }
+    g.globalCompositeOperation='source-over';g.lineCap='round';
+    /* a thin line ties the leading notes together in the order they were played */
+    const leads=this.list.filter(s=>s.lead);
+    for(let i=1;i<leads.length;i++){
+      const p=leads[i-1],q=leads[i];if(q.x<p.x)continue;
+      const lg=g.createLinearGradient(p.x,p.y,q.x,q.y);lg.addColorStop(0,col(p,50,.7*fade(p)));lg.addColorStop(1,col(q,50,.7*fade(q)));
+      g.strokeStyle=lg;g.lineWidth=1.6;g.beginPath();g.moveTo(p.x,p.y);
+      g.bezierCurveTo((p.x+q.x)/2,p.y,(p.x+q.x)/2,q.y,q.x,q.y);g.stroke();
+    }
+    for(const s of this.list){
+      const a=fade(s),k=pop(s);
+      if(s.kind==='tick'){g.strokeStyle=col(s,50,.85*a);g.lineWidth=2.5;g.beginPath();g.moveTo(s.x,s.y-s.r*1.1*k);g.lineTo(s.x,s.y+s.r*1.1*k);g.stroke()}
+      else if(s.lead){
+        g.strokeStyle=col(s,50,.95*a);g.lineWidth=Math.max(3,s.r*.05);g.beginPath();g.arc(s.x,s.y,s.r*k,0,6.2832);g.stroke();
+        if(s.name&&s.age<s.life*.7){const o=s.r*.72,lx=s.x+o+10,ly=s.y-o-6;g.strokeStyle='rgba(40,32,36,'+(.6*a).toFixed(2)+')';g.lineWidth=1;g.beginPath();g.moveTo(s.x+o*.95,s.y-o*.9);g.lineTo(lx,ly+4);g.stroke();
+          g.fillStyle='rgba(30,24,28,'+(.9*a).toFixed(2)+')';g.font='italic '+Math.round(Math.max(18,Math.min(34,s.r*.22)))+'px "Instrument Serif",Georgia,serif';g.fillText(s.name,lx+3,ly)}
+        g.fillStyle=col(s,48,a);g.beginPath();g.arc(s.x,s.y,Math.max(3,s.r*.09),0,6.2832);g.fill();
+      }
+    }
+  }
+};
+
+let AC=null,analyser=null,fbuf,bbuf,prevB,elSrc=null;
+let fluxAvg=0,lastOn=0;
+function ensureAC(){
+  if(!AC){
+    AC=new (window.AudioContext||window.webkitAudioContext)();
+    analyser=AC.createAnalyser();analyser.fftSize=8192;analyser.smoothingTimeConstant=.55;analyser.minDecibels=-100;analyser.maxDecibels=-10;
+    const mute=AC.createGain();mute.gain.value=0;analyser.connect(mute);mute.connect(AC.destination);
+    fbuf=new Float32Array(analyser.frequencyBinCount);bbuf=new Uint8Array(analyser.frequencyBinCount);prevB=new Uint8Array(analyser.frequencyBinCount);
+  }
+  if(AC.state==='suspended')AC.resume();
+}
+function analyse(now){
+  const F={notes:[],chroma:new Float32Array(12),energy:0,bass:0,bright:.5,onset:false,flux:0};
+  analyser.getFloatFrequencyData(fbuf);analyser.getByteFrequencyData(bbuf);
+  const hz=AC.sampleRate/analyser.fftSize,lo=Math.ceil(60/hz),hi=Math.min(fbuf.length-2,Math.floor(5000/hz)),top=Math.min(bbuf.length,Math.floor(9000/hz));
+  let flux=0,sum=0,bs=0,bn=0,cw=0;
+  for(let i=1;i<top;i++){const b=bbuf[i],d=b-prevB[i];if(d>0)flux+=d;prevB[i]=b;sum+=b;if(i*hz<160){bs+=b;bn++}cw+=b*Math.log2(i*hz)}
+  flux/=top*255;
+  let mx=-200;for(let i=lo;i<=hi;i++)if(fbuf[i]>mx)mx=fbuf[i];
+  F.energy=mx<-78?0:clamp(clamp((sum/(top*255)-.1)*2)*.5+clamp((mx+72)/50)*.6);
+  F.bass=clamp(bs/(bn*255)*1.25);
+  F.bright=sum?clamp((cw/sum-8.6)/2.6):.5;
+  if(flux>fluxAvg*1.6+.004&&now-lastOn>110&&F.energy>.05){F.onset=true;lastOn=now}
+  fluxAvg=fluxAvg*.93+flux*.07;
+  F.flux=clamp(flux*18);
+  if(mx<-78)return F;
+  const floor=mx-32,best=new Map();
+  for(let i=lo;i<=hi;i++){const v=fbuf[i];
+    if(v>floor&&v>fbuf[i-1]&&v>=fbuf[i+1]){const m=Math.round(69+12*Math.log2(i*hz/440)),s=(v-floor)/32;if(!(best.get(m)>=s))best.set(m,s)}}
+  let cm=0;
+  best.forEach((s,m)=>{F.notes.push({midi:m,pc:m%12,s,v:0});F.chroma[m%12]+=s;if(F.chroma[m%12]>cm)cm=F.chroma[m%12]});
+  if(cm)for(let i=0;i<12;i++)F.chroma[i]/=cm;
+  F.notes.sort((a,b)=>b.s-a.s);F.notes.length=Math.min(F.notes.length,6);
+  for(const n of F.notes)n.v=vivid(n,F);
+  return F;
+}
+
+/* =====================================================================================================
+   Triggers (added on top of the preferred preview). With "Notes" selected, nothing below changes what the
+   renderers receive, so the default look and motion are exactly those of three-styles.html.
+   ===================================================================================================== */
+/* Layout hints. Defaults leave every renderer exactly as it was. */
+const LAYOUT={x:null,xs:.05,band:1,hold:false,tight:false,prog:0,size:1};
+let trigger='notes';
+const TRIGGER_NAMES={notes:'Notes',pitch:'Pitch',instruments:'Instruments',harmony:'Harmony',whole:'Whole Song'};
+
+/* the preferred demo (18 s) has known chords: Am, F, C, G, each lasting 4.25 s */
+const ORIG_CHORDS=[
+  {name:'Am',root:9,minor:true, t:0,   pad:[57,60,64,69]},
+  {name:'F', root:5,minor:false,t:4.25,pad:[53,57,60,65]},
+  {name:'C', root:0,minor:false,t:8.5, pad:[48,55,64,67]},
+  {name:'G', root:7,minor:false,t:12.75,pad:[55,59,62,71]}];
+/* a second, 20 s "known parts" demo for Instruments: four parts generated separately */
+const KNOWN_DURATION=20;
+const KNOWN_CHORDS=[
+  {name:'Am',root:9,minor:true, t:0, pad:[57,60,64],bass:45,mel:[69,72,76,81]},
+  {name:'F', root:5,minor:false,t:5, pad:[57,60,65],bass:41,mel:[72,77,81,84]},
+  {name:'C', root:0,minor:false,t:10,pad:[55,60,64],bass:48,mel:[84,79,76,72]},
+  {name:'G', root:7,minor:false,t:15,pad:[55,59,62],bass:43,mel:[71,67,62,59]}];
+/* pc = the note slot whose hue we borrow: hue = ((pc*7)%12)*30 */
+const PARTS={
+  bass: {label:'Bass', pc:3, gain:1},
+  pad:  {label:'Pad',  pc:6, gain:.75},
+  pluck:{label:'Pluck',pc:7, gain:.85},
+  bell: {label:'Bell melody',pc:10,gain:1}};
+const EVENTS=[];
+for(const c of KNOWN_CHORDS){
+  for(const o of [0,2.5])EVENTS.push({part:'bass',t:c.t+o,dur:2.3,midi:c.bass});
+  for(const m of c.pad)EVENTS.push({part:'pad',t:c.t,dur:5,midi:m});
+  for(let k=0;k<8;k++)EVENTS.push({part:'pluck',t:c.t+.3+k*.6,dur:.55,midi:c.pad[[0,1,2,1,0,1,2,1][k]]+12});
+  c.mel.forEach((m,k)=>EVENTS.push({part:'bell',t:c.t+.2+k*1.2,dur:1.1,midi:m}));
+}
+EVENTS.sort((a,b)=>a.t-b.t);
+const TIMBRE={
+  bass:(f,tau)=>.34*Math.min(1,tau/.01)*Math.exp(-tau*1.3)*(Math.sin(2*Math.PI*f*tau)+.35*Math.sin(4*Math.PI*f*tau)),
+  pad:(f,tau,d)=>.07*Math.min(1,tau/.6)*Math.min(1,(d-tau)/.6)*(Math.sin(2*Math.PI*f*tau)+Math.sin(2*Math.PI*f*1.004*tau))*.5,
+  pluck:(f,tau)=>.13*Math.min(1,tau/.004)*Math.exp(-tau*7)*(Math.sin(2*Math.PI*f*tau)+.5*Math.sin(4*Math.PI*f*tau)+.25*Math.sin(6*Math.PI*f*tau)),
+  bell:(f,tau)=>.16*Math.min(1,tau/.004)*Math.exp(-tau*2.6)*(Math.sin(2*Math.PI*f*tau)+.4*Math.exp(-tau*3)*Math.sin(2*Math.PI*f*2.76*tau)+.25*Math.exp(-tau*5)*Math.sin(2*Math.PI*f*5.4*tau))};
+function buildKnownDemo(){
+  const rate=22050,mix=new Float32Array(rate*KNOWN_DURATION);
+  for(const p of Object.keys(PARTS)){                 /* each part is rendered on its own first, then mixed */
+    const buf=new Float32Array(mix.length);
+    for(const e of EVENTS)if(e.part===p){
+      const f=440*2**((e.midi-69)/12),o=Math.round(e.t*rate),n=Math.round(e.dur*rate);
+      for(let i=0;i<n&&o+i<buf.length;i++)buf[o+i]+=TIMBRE[p](f,i/rate,e.dur);
+    }
+    for(let i=0;i<mix.length;i++)mix[i]+=buf[i];
+  }
+  const buffer=new ArrayBuffer(44+mix.length*2),wav=new DataView(buffer);
+  for(const [o,w] of [[0,'RIFF'],[8,'WAVE'],[12,'fmt '],[36,'data']])[...w].forEach((c,i)=>wav.setUint8(o+i,c.charCodeAt(0)));
+  wav.setUint32(4,buffer.byteLength-8,true);wav.setUint32(16,16,true);wav.setUint16(20,1,true);wav.setUint16(22,1,true);
+  wav.setUint32(24,rate,true);wav.setUint32(28,rate*2,true);wav.setUint16(32,2,true);wav.setUint16(34,16,true);wav.setUint32(40,mix.length*2,true);
+  mix.forEach((s,i)=>wav.setInt16(44+i*2,Math.round(clamp(s,-1,1)*32767),true));
+  return URL.createObjectURL(new Blob([buffer],{type:'audio/wav'}));
+}
+let demoKind='orig',knownUrl='',harmonyNow=null,prevT=0;
+const wantKind=()=>trigger==='instruments'?'known':'orig';
+const demoLength=()=>demoKind==='known'?KNOWN_DURATION:duration;
+const demoLabel=()=>demoKind==='known'?'20-second known-parts demo':'18-second demo';
+const urlFor=kind=>kind==='known'?(knownUrl||=buildKnownDemo()):(demoUrl||=buildDemo());
+const isDemo=()=>!file;
+const progress=()=>clamp((audio.currentTime||0)/(isDemo()?demoLength():(audio.duration||duration)));
+const effectiveMode=()=>trigger==='whole'?'paint':mode;
+const timelineDriven=()=>isDemo()&&(trigger==='instruments'||trigger==='harmony');
+
+/* Frames built from the demo's known events rather than from listening */
+function chordFrame(chords,t,prev){
+  const F={notes:[],chroma:new Float32Array(12),energy:.55,bass:.35,bright:.5,onset:false,flux:.1};
+  const c=[...chords].reverse().find(x=>t>=x.t)||chords[0];
+  const tones=[c.root,(c.root+(c.minor?3:4))%12,(c.root+7)%12],since=(t-c.t)%1.25;
+  tones.forEach((pc,i)=>F.notes.push({midi:c.pad.find(m=>m%12===pc)||c.pad[i],pc,s:[1,.8,.7][i]*(1-.25*since/1.25),v:clamp((c.minor?.52:.85)+(i?0:.1))}));
+  F.onset=Math.floor((t-c.t)/1.25)!==Math.floor((prev-c.t)/1.25)||prev<c.t;F.flux=F.onset?.5:.1;
+  harmonyNow={name:c.name,tones,minor:c.minor,how:'known'};
+  return F;
+}
+function instrumentFrame(t,prev){
+  const F={notes:[],chroma:new Float32Array(12),energy:.55,bass:.2,bright:.5,onset:false,flux:.1};
+  for(const p of Object.keys(PARTS)){
+    const e=EVENTS.filter(x=>x.part===p&&t>=x.t&&t<x.t+x.dur).sort((a,b)=>b.t-a.t)[0];
+    if(!e)continue;
+    const s=clamp(PARTS[p].gain*(1-.6*(t-e.t)/e.dur));
+    F.notes.push({midi:e.midi,pc:PARTS[p].pc,label:PARTS[p].label,s,v:clamp(.5+.4*s)});
+  }
+  F.notes.sort((a,b)=>b.s-a.s);
+  const hit=EVENTS.filter(e=>e.t>prev&&e.t<=t);
+  F.onset=hit.length>0;F.flux=hit.length?.55:.1;
+  return F;
+}
+
+/* Harmony estimate for uploaded audio: match smoothed pitch-class strength against 24 major and minor triads */
+const TRIADS=[];
+for(let r=0;r<12;r++)for(const minor of [false,true]){
+  const v=new Float32Array(12);v[r]=1;v[(r+(minor?3:4))%12]=1;v[(r+7)%12]=1;
+  TRIADS.push({v,r,minor,name:NOTE[r]+(minor?'m':''),tones:[r,(r+(minor?3:4))%12,(r+7)%12]});
+}
+const est={acc:new Float32Array(12),cand:-1,count:0,now:null,last:''};
+function estimateReset(){est.acc.fill(0);est.cand=-1;est.count=0;est.now=null;est.last=''}
+function estimateChord(F){
+  const a=est.acc;let mag=0;
+  for(let i=0;i<12;i++){a[i]=a[i]*.92+F.chroma[i]*.08;mag+=a[i]*a[i]}
+  mag=Math.sqrt(mag);
+  if(mag<.12){est.now=null;est.cand=-1;est.count=0;return null}
+  let best=-1,bs=0,second=0;
+  TRIADS.forEach((t,i)=>{let d=0;for(let k=0;k<12;k++)d+=a[k]*t.v[k];const s=d/(mag*Math.sqrt(3));
+    if(s>bs){second=bs;bs=s;best=i}else if(s>second)second=s});
+  const sure=bs>.8&&bs-second>.05;        /* strong match, clearly ahead of the runner-up, held for a third of a second */
+  if(sure&&best===est.cand)est.count++;else{est.cand=sure?best:-1;est.count=sure?1:0}
+  if(est.count>=12)est.now={name:TRIADS[best].name,tones:TRIADS[best].tones,minor:TRIADS[best].minor,how:'estimate'};
+  return est.now;
+}
+
+/* Pitch colors run low to high: violet, blue, cyan, green, lime, yellow, orange, pink */
+const PITCH_HUES=[270,240,210,180,150,120,60,30,330];
+const pitchSlot=midi=>(((PITCH_HUES[Math.round((PITCH_HUES.length-1)*clamp((midi-40)/48))])/30)*7)%12;
+
+/* One frame of artwork information. With Notes selected this is exactly what the preferred page did. */
+function buildFrame(now){
+  const t=audio.currentTime||0;
+  let F;
+  harmonyNow=null;
+  if(timelineDriven()&&trigger==='instruments')F=instrumentFrame(t,prevT);
+  else if(timelineDriven())F=chordFrame(demoKind==='known'?KNOWN_CHORDS:ORIG_CHORDS,t,prevT);
+  else{
+    F=analyse(now);
+    if(trigger==='harmony'){
+      const c=estimateChord(F);
+      if(c){
+        harmonyNow=c;
+        F.notes=c.tones.map((pc,i)=>({midi:52+((pc-4+12)%12),pc,s:[1,.8,.7][i]*clamp(.55+F.energy),v:clamp((c.minor?.52:.85)+(i?0:.1))}));
+        F.onset=F.onset||c.name!==est.last;est.last=c.name;
+      }
+    }else if(trigger==='pitch')F.notes=F.notes.map(n=>({...n,pc:pitchSlot(n.midi),label:NOTE[n.pc]}));
+  }
+  if(trigger==='whole'){          /* the color journey: cyan, green, yellow, orange, red, purple, blue, pink over the song */
+    const K=[190,150,100,55,30,5,-25,-75,-105,-45],u=progress()*(K.length-1),i=Math.min(K.length-2,Math.floor(u)),base=K[i]+(K[i+1]-K[i])*(u-i);
+    F.notes=F.notes.map(n=>{const off=(((hueOf(n.pc)-180+540)%360)-180)*.1,h=((base+off)%360+360)%360;return {...n,pc:((Math.round(h/30)%12)*7)%12,label:NOTE[n.pc]}});
+  }
+  prevT=t;
+  /* A chord can produce several clouds, but repeated octaves share the same color. */
+  F.notes=F.notes.filter((n,i,a)=>a.findIndex(o=>o.pc===n.pc)===i);
+  LAYOUT.prog=progress();
+  if(trigger==='pitch'){LAYOUT.x=.04+.92*(((audio.currentTime||0)%16)/16);   /* a 16-second sweep, so long songs still use the full width */LAYOUT.xs=.04;LAYOUT.band=.22;LAYOUT.size=1}
+  else if(trigger==='whole'){LAYOUT.x=.06+.88*LAYOUT.prog;LAYOUT.xs=.05;LAYOUT.band=1;LAYOUT.size=.6}
+  else{LAYOUT.x=null;LAYOUT.xs=.05;LAYOUT.band=1;LAYOUT.size=1}
+  return F;
+}
+
+function sourceInfo(){
+  const demo=isDemo();
+  switch(trigger){
+    case 'pitch':return {cls:'est',tag:'ESTIMATED',text:'Low notes sit low, high notes sit high, moving left to right. Pitch is estimated.'};
+    case 'instruments':return demo
+      ?{cls:'demo',tag:'DEMO DATA',text:'Four parts generated separately, so instruments are known, not detected. Uses a separate 20-second demo.'}
+      :{cls:'na',tag:'NOT AVAILABLE',text:'Instrument identification is not available for a mixed song file, so note colors are shown instead.'};
+    case 'harmony':return demo
+      ?{cls:'demo',tag:'DEMO DATA',text:'Demo chords are known (Am, F, C, G). The palette follows the chord.'}
+      :{cls:'est',tag:'ESTIMATED',text:'Chords are estimated and named only when the match is strong. They can be wrong.'};
+    case 'whole':return {cls:'est',tag:'ESTIMATED',text:'One composition builds left to right and is held at the end. Sections are generic.'};
+    default:return null;
+  }
+}
+function renderSource(){
+  const el=$('source'),info=sourceInfo();
+  el.hidden=!info;
+  if(!info)return;
+  el.textContent='';
+  const b=document.createElement('span');b.className='badge '+info.cls;b.textContent=info.tag;
+  el.append(b,info.text.split('. ')[0].replace(/\.$/,''));el.title=info.text;
+  if(trigger==='harmony'&&harmonyNow){}
+}
+let shownChord='';
+function updateChordReadout(){
+  if(trigger!=='harmony')return;
+  const h=harmonyNow,key=h?h.name+h.how:'none';
+  if(key===shownChord)return;shownChord=key;
+  const el=$('source'),info=sourceInfo();
+  el.textContent='';
+  const b=document.createElement('span');b.className='badge '+info.cls;b.textContent=info.tag;
+  const L=$('legend');if(h){L.textContent='';for(const pc of h.tones)L.append(chip(pc,NOTE[pc]));L.append(h.name+(h.minor?' minor':' major'))}
+  else if(L&&!L.children.length)L.textContent='Chord colors appear when the music plays';
+  el.append(b,h?'Chord: '+h.name+' ('+h.tones.map(p=>NOTE[p]).join(' ')+') · '+(h.how==='known'?'known from the demo':'estimate, may be wrong'):info.text);
+}
+const LEAD={notes:'Each note has a color',pitch:'Higher pitch sits higher',instruments:'One color per instrument',harmony:'Chords shape the palette',whole:'A color journey across the song'};
+const DEFAULTS={notes:{style:'sh',mode:'fade'},pitch:{style:'sh',mode:'fade'},instruments:{style:'ink',mode:'paint'},harmony:{style:'wc',mode:'fade'},whole:{style:'wc',mode:'paint'}};
+const REFS={notes:'reference-notes.png',pitch:'02-pitch.png',instruments:'03-instruments.png',harmony:'04-harmony.png',whole:'reference-whole-song.png'};
+function chip(pc,label,row){
+  const c=document.createElement('div'),i=document.createElement('i');
+  c.className='chip'+(row?' row':'');i.style.background=paint(pc,1,1,false);c.append(i,label);return c;
+}
+function renderLegend(){
+  const L=$('legend');L.textContent='';L.className='';shownChord='';
+  if(trigger==='notes'){for(let k=0;k<12;k++){const pc=(k*7)%12;L.append(chip(pc,NOTE[pc]))}}
+  else if(trigger==='pitch'){
+    const bar=document.createElement('div');bar.id='gradbar';bar.style.background='linear-gradient(90deg,'+PITCH_HUES.map(h=>'hsl('+h+',85%,52%)').join(',')+')';
+    L.append('Low',bar,'High');L.style.alignItems='center';L.style.gap='10px';
+  }else if(trigger==='instruments'){
+    if(isDemo()){for(const p in PARTS)L.append(chip(PARTS[p].pc,PARTS[p].label,true))}
+    /* for a song file the source chip already says instruments are unavailable */
+  }else if(trigger==='harmony'){L.id='legend';updateChordReadout()}
+  else{L.textContent='Colors move through the spectrum with time'}
+  $('chapters').hidden=trigger!=='whole';
+  $('foot').textContent=trigger==='whole'?'Generic sections, not detected song structure':'Local preview · '+(isDemo()?'demo audio':'your file');
+}
+$('seek').addEventListener('input',()=>{const dur=isDemo()?demoLength():(audio.duration||0);if(dur){audio.currentTime=dur*$('seek').value/1000;prevT=audio.currentTime}});
+$('moreBtn').addEventListener('click',e=>{e.stopPropagation();const open=$('more').hidden;$('more').hidden=!open;$('moreBtn').setAttribute('aria-expanded',String(open))});
+document.addEventListener('click',e=>{if(!$('moreWrap').contains(e.target)){$('more').hidden=true;$('moreBtn').setAttribute('aria-expanded','false')}});
+$('refbtn').addEventListener('click',()=>{
+  const on=$('ref').hidden;$('ref').hidden=!on;$('refbtn').setAttribute('aria-pressed',String(on));
+  if(on)$('refimg').src='../../design-previews/'+REFS[trigger];
+});
+function downloadCanvas(name){
+  cv.toBlob(blob=>{
+    if(!blob)return;
+    const link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download=name;link.click();
+    setTimeout(()=>URL.revokeObjectURL(link.href),1000);
+  });
+}
+
+let mode = 'fade';
+let style = 'sh';
+let R = INK;
+/* watercolor and the ink painting mode keep everything and end as a still image; the others let go of old marks */
+const keeps = () => style === 'wc' || trigger === 'whole' || (style === 'ink' && mode === 'paint');
+let file = null;
+let fileUrl = '';
+let demoUrl = '';
+let complete = false;
+let started = false;
+let fading = false;
+let starting = false;
+let output = null;
+const description = $('description');
+const play = $('play');
+const save = $('save');
+const say = message => { $('status').textContent = message; };
+const duration = 18;
+
+function buildDemo() {
+  const rate = 22050;
+  const samples = new Float32Array(rate * duration);
+  const chords = [[57,60,64,69],[53,57,60,65],[48,55,64,67],[55,59,62,71]];
+  // Separate attacks, a quiet gap, then overlapping notes to show both ink behaviors.
+  for (const [section, chord] of chords.entries()) {
+    for (const [voice, midi] of chord.entries()) {
+      const offset = Math.round(rate * (section * 4.25 + voice * (section < 2 ? .48 : .21)));
+      const length = Math.round(rate * (section === 0 ? 1.4 : 2.9));
+      const frequency = 440 * 2 ** ((midi - 69) / 12);
+      for (let i = 0; i < length && offset + i < samples.length; i++) {
+        const progress = i / length;
+        const envelope = Math.min(1, i / (rate * .028)) * (1 - progress) ** 1.8;
+        const phase = 2 * Math.PI * frequency * i / rate;
+        samples[offset + i] += envelope * (.16 * Math.sin(phase) + .038 * Math.sin(phase * 2));
+      }
+    }
+  }
+  const buffer = new ArrayBuffer(44 + samples.length * 2);
+  const wav = new DataView(buffer);
+  for (const [offset, word] of [[0,'RIFF'],[8,'WAVE'],[12,'fmt '],[36,'data']]) {
+    [...word].forEach((char, index) => wav.setUint8(offset + index, char.charCodeAt(0)));
+  }
+  wav.setUint32(4, buffer.byteLength - 8, true);
+  wav.setUint32(16, 16, true);
+  wav.setUint16(20, 1, true);
+  wav.setUint16(22, 1, true);
+  wav.setUint32(24, rate, true);
+  wav.setUint32(28, rate * 2, true);
+  wav.setUint16(32, 2, true);
+  wav.setUint16(34, 16, true);
+  wav.setUint32(40, samples.length * 2, true);
+  samples.forEach((sample, index) => wav.setInt16(44 + index * 2, Math.round(clamp(sample, -1, 1) * 32767), true));
+  return URL.createObjectURL(new Blob([buffer], {type:'audio/wav'}));
+}
+
+function sizeCanvas() {
+  const {width, height} = cv.getBoundingClientRect();
+  W = Math.max(1, width);
+  H = Math.max(1, height);
+  DPR = Math.min(devicePixelRatio || 1, 1.5);
+  cv.width = Math.round(W * DPR);
+  cv.height = Math.round(H * DPR);
+  g.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+
+function describe() {
+  description.textContent = complete ? 'Your painting is ready to save.' : LEAD[trigger];
+  $('subnote').textContent = complete ? '' : style === 'wc' ? 'Layered Watercolor: each note adds a wash.'
+    : style === 'sh' ? 'Musical Shapes: forms arrive with each note, then recede.'
+    : effectiveMode() === 'paint' ? 'Ink Clouds: clouds stay and layer into a painting.' : 'Ink Clouds: clouds dissolve as new notes arrive.';
+}
+
+function syncUI() {
+  play.textContent = audio.paused
+    ? audio.ended ? 'Replay' : started ? 'Resume' : file ? 'Play song' : 'Play demo'
+    : 'Pause';
+  play.classList.toggle('playing', !audio.paused);
+  play.setAttribute('aria-label', play.textContent);
+  $('restart').hidden = !started;
+  $('demo').disabled = !file;
+  save.disabled = !complete;
+  const dur = isDemo() ? demoLength() : (audio.duration || 0), cur = audio.currentTime || 0;
+  const mmss = x => Math.floor(x / 60) + ':' + String(Math.floor(x % 60)).padStart(2, '0');
+  $('clock').textContent = mmss(cur) + (dur ? ' / ' + mmss(dur) : '');
+  if (document.activeElement !== $('seek')) $('seek').value = dur ? Math.round(1000 * cur / dur) : 0;
+  const head = $('head'); if (head) head.style.left = (dur ? 100 * cur / dur : 0) + '%';
+}
+
+function reset() {
+  audio.pause();
+  if (audio.readyState) audio.currentTime = 0;
+  complete = started = fading = false;
+  prevB?.fill(0);
+  fluxAvg = lastOn = 0;
+  INK.seed = 7;
+  /* each trigger may need the known-parts demo; the default Notes view keeps the preferred 18-second demo */
+  if (!file && demoKind !== wantKind()) {
+    demoKind = wantKind();
+    if (audio.getAttribute('src')) audio.src = urlFor(demoKind);
+    $('track').textContent = $('track').title = demoLabel();
+  }
+  prevT = 0;
+  estimateReset();
+  shownChord = '';
+  LAYOUT.hold = trigger === 'whole';
+  LAYOUT.tight = trigger === 'whole' && style === 'wc';
+  LAYOUT.x = null; LAYOUT.xs = .05; LAYOUT.band = 1; LAYOUT.size = 1;
+  INK.pigmentKeep = effectiveMode() === 'paint' ? 1 : .99;
+  INK_GL.look.fade = effectiveMode() === 'paint' ? 1 : .9988;
+  INK_GL.look.erode = effectiveMode() === 'paint' ? 0 : .0004;
+  R = style === 'wc' ? WC : style === 'sh' ? SH : INK;
+  $('modeWrap').style.visibility = style === 'ink' ? 'visible' : 'hidden';   /* keeps its place so the bar never moves */
+  $('modeSel').value = effectiveMode();
+  $('modeSel').disabled = trigger === 'whole';
+  $('styleSel').value = style;
+  renderSource();
+  renderLegend();
+  R.init();
+  describe();
+  syncUI();
+}
+
+function selectFile(nextFile) {
+  reset();
+  if (fileUrl) URL.revokeObjectURL(fileUrl);
+  file = nextFile;
+  fileUrl = file ? URL.createObjectURL(file) : '';
+  if (fileUrl) audio.src = fileUrl;
+  else {
+    audio.removeAttribute('src');
+    audio.load();
+  }
+  $('track').textContent = file ? file.name : demoLabel();
+  $('track').title = $('track').textContent;
+  syncUI();
+}
+
+async function togglePlayback() {
+  if (!audio.paused) {
+    audio.pause();
+    return;
+  }
+  if (starting) return;
+  starting = true;
+  play.disabled = true;
+  try {
+    if (audio.ended) reset();
+    if (!audio.getAttribute('src')) {
+      audio.src = urlFor(demoKind);
+    }
+    ensureAC();
+    if (!elSrc) {
+      elSrc = AC.createMediaElementSource(audio);
+      output = AC.createGain();
+      output.gain.value = Number($('mute').getAttribute('aria-pressed') === 'false');
+      elSrc.connect(analyser);
+      elSrc.connect(output);
+      output.connect(AC.destination);
+    }
+    await audio.play();
+    started = true;
+  } catch (error) {
+    if (error.name !== 'AbortError') {
+      description.textContent = 'This audio could not play. Try the demo or an MP3 or WAV file.';
+      say(description.textContent);
+    }
+  } finally {
+    starting = false;
+    play.disabled = false;
+    syncUI();
+  }
+}
+
+$('modeSel').addEventListener('change', () => { mode = $('modeSel').value; reset(); say('Ink behavior changed. The track is ready to play from the beginning.'); });
+$('styleSel').addEventListener('change', () => { style = $('styleSel').value; reset(); say('Style changed. The same track is ready to play from the beginning.'); });
+document.querySelectorAll('input[name=trigger]').forEach(input => {
+  input.addEventListener('change', () => {
+    trigger = input.value;
+    style = DEFAULTS[trigger].style;   /* each trigger opens in the style that shows it best; the selector can still change it */
+    mode = DEFAULTS[trigger].mode;
+    reset();
+    if (!$('ref').hidden) $('refimg').src = '../../design-previews/' + REFS[trigger];
+    say(TRIGGER_NAMES[trigger] + ' selected. The track is ready to play from the beginning.');
+  });
+});
+$('snapshot').addEventListener('click', () => {
+  const t = Math.floor(audio.currentTime || 0);
+  downloadCanvas('the-sound-of-color-snapshot-' + style + '-' + trigger + '-' + Math.floor(t / 60) + 'm' + String(t % 60).padStart(2, '0') + 's.png');
+  say('Snapshot saved. The music keeps playing.');
+});
+$('choose').addEventListener('click', () => $('file').click());
+$('file').addEventListener('change', event => {
+  const [nextFile] = event.target.files;
+  if (nextFile) selectFile(nextFile);
+  event.target.value = '';
+});
+$('demo').addEventListener('click', () => selectFile(null));
+$('mute').addEventListener('click', event => {
+  const button = event.currentTarget;
+  const muted = button.getAttribute('aria-pressed') === 'false';
+  button.setAttribute('aria-pressed', String(muted));
+  if (output) output.gain.value = muted ? 0 : 1;
+});
+play.addEventListener('click', togglePlayback);
+$('restart').addEventListener('click', () => { reset(); togglePlayback(); });
+for (const event of ['play','pause','timeupdate']) audio.addEventListener(event, syncUI);
+audio.addEventListener('ended', () => {
+  complete = keeps();
+  fading = !complete;
+  if (fading) INK_GL.look.fade = .9925;
+  describe();
+  syncUI();
+  say(complete ? 'Painting complete. Save it as an image.' : 'The song has ended.');
+});
+save.addEventListener('click', () => {
+  cv.toBlob(blob => {
+    if (!blob) return;
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'the-sound-of-color-painting.png';
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  });
+});
+
+let resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    const still = complete || style === 'wc' ? document.createElement('canvas') : null;
+    if (still) {
+      still.width = cv.width;
+      still.height = cv.height;
+      still.getContext('2d').drawImage(cv, 0, 0);
+    }
+    sizeCanvas();
+    if (still) g.drawImage(still, 0, 0, W, H);
+    else R.resize();
+  }, 120);
+});
+
+let lastFrame = 0;
+function loop(now) {
+  requestAnimationFrame(loop);
+  const interval = 1000 / (R.fps || 36);
+  if (now - lastFrame < interval - 1 || complete || (audio.paused && !fading)) return;
+  lastFrame = now - (now - lastFrame) % interval;
+  if (!audio.paused && analyser) {
+    // A chord can produce several clouds, but repeated octaves share the same color (done inside buildFrame).
+    const frame = buildFrame(now);
+    window.__lastFrame = frame;   /* local test hook */
+    R.frame(frame);
+    updateChordReadout();
+  }
+  R.step(1 / 36);
+  if (fading && R.idle()) {
+    fading = false;
+    R.init();
+  }
+}
+/* local experiment only: lets a tester adjust the look from the browser console */
+window.__inkLab = {INK, WC, SH, LAYOUT, pitchSlot, chordFrame, instrumentFrame, ORIG_CHORDS, KNOWN_CHORDS, estimateChord, estimateReset, state: () => ({style, trigger, mode, complete, demoKind}) };
+/* optional second direction for review: add ?look=glaze for thinner, see-through ink that mixes where clouds overlap */
+if (/[?&]look=glaze\b/.test(location.search)) Object.assign(INK_GL.look, {dense:1.5, pale:.5, crease:.5, broad:.06});
+sizeCanvas();
+reset();
+requestAnimationFrame(loop);
+})();
+</script>
+</html>

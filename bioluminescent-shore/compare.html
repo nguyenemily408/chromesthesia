@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Glowing Waves — Side by Side</title>
+<style>
+  html, body { margin: 0; min-height: 100%; background: #02040b; color: #cfe9ff;
+    font: 15px/1.45 -apple-system, "Helvetica Neue", Arial, sans-serif; }
+  .wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px; box-sizing: border-box; }
+  @media (max-width: 760px) { .wrap { grid-template-columns: 1fr; } }
+  figure { margin: 0; }
+  .frame { aspect-ratio: 16 / 9; background: #000; border-radius: 10px; overflow: hidden; }
+  .frame iframe, .frame video { width: 100%; height: 100%; border: 0; display: block; object-fit: cover; }
+  figcaption { padding: 10px 2px 0; }
+  figcaption b { display: block; color: #7fd6ff; font-size: 16px; margin-bottom: 2px; }
+  figcaption span { color: #8fa9c4; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <figure>
+    <div class="frame"><iframe src="photo.html" title="Moving photo"></iframe></div>
+    <figcaption><b>1. Your photo, animated by code</b><span>Drawn live in the browser. Now with rolling curls and foam that runs up the sand and back every 7 seconds.</span></figcaption>
+  </figure>
+  <figure>
+    <div class="frame"><video src="blender/glowing_waves.mp4" autoplay loop muted playsinline></video></div>
+    <figcaption><b>2. Blender quick test</b><span>A 4-second video rendered in advance, playing on repeat.</span></figcaption>
+  </figure>
+  <figure>
+    <div class="frame"><video src="blender/serious/breaking_wave.mp4" autoplay loop muted playsinline></video></div>
+    <figcaption><b>3. Blender water simulation</b><span>Simulated water breaking on a beach, about 70 minutes to render.</span></figcaption>
+  </figure>
+  <figure>
+    <div class="frame"><video src="blender/serious/sculpted_wave.mp4" autoplay loop muted playsinline></video></div>
+    <figcaption><b>4. Blender hand-shaped wave</b><span>Wave shape drawn by hand instead of simulated: it curls, crashes and washes up. 8 seconds, about 25 minutes to render.</span></figcaption>
+  </figure>
+</div>
+</body>
+</html>

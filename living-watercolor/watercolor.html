@@ -1,0 +1,576 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Living Watercolor</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #f6f3ec; overflow: hidden; font: 14px/1.3 system-ui, sans-serif; }
+  #stage { position: fixed; inset: 0; }
+  #stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #bar { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; gap: 10px; align-items: center;
+         background: rgba(255,255,255,.86); border: 1px solid rgba(0,0,0,.12); border-radius: 999px; padding: 7px 14px; color: #223; }
+  #bar button { font: inherit; border: 1px solid rgba(0,0,0,.2); background: #fff; border-radius: 999px; padding: 4px 12px; cursor: pointer; }
+  #bar input { font: inherit; width: 52px; border: 1px solid rgba(0,0,0,.2); border-radius: 6px; padding: 3px 5px; }
+  #prog { width: 120px; height: 5px; background: rgba(0,0,0,.12); border-radius: 3px; overflow: hidden; }
+  #prog i { display: block; height: 100%; width: 0; background: #3b78c4; }
+  #msg { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; padding: 24px; text-align: center; color: #223; }
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="gl"></canvas><canvas id="ink"></canvas></div>
+<div id="bar">
+  <button id="play">Pause</button>
+  <button id="again">Restart</button>
+  <button id="fresh">New painting</button>
+  <label>Length <input id="len" value="4:00" aria-label="Length of the painting, minutes and seconds"></label>
+  <div id="prog"><i></i></div>
+</div>
+<div id="msg">This page needs WebGL 2 with float textures, which this browser does not offer.</div>
+<script>
+/* Living Watercolor — a painting that paints itself slowly over the length of a song.
+   Address options:  ?dur=240 (seconds)  ?seed=7  ?t=0.5 (jump to that fraction and hold)  ?ui=0 (hide the buttons)
+   From another page: window.watercolor.start({duration, seed, gold, auto}) (auto: false = no built-in painting, only what is added from outside), .gold(style, {...}) for gold in one music mode's style, .seek(fraction), .pause(), .play(),
+                      .addStroke({x, y, color:[c,m,y], size, water, metal:'gold'|'silver'|'copper'}) for paint added from outside (for example by music). */
+(function () {
+'use strict';
+const qs = new URLSearchParams(location.search);
+const glc = document.getElementById('gl'), inkc = document.getElementById('ink');
+if (qs.get('ui') === '0') document.getElementById('bar').style.display = 'none';
+const gl = glc.getContext('webgl2', { preserveDrawingBuffer: true, antialias: false, alpha: false });
+if (!gl || !gl.getExtension('EXT_color_buffer_float')) { document.getElementById('msg').style.display = 'flex'; return; }
+
+const STEPS_PER_SEC = 60;
+const DAMP = 0.42;                       // the sheet starts evenly wet and stays damp until near the end
+const dampAt = t => DAMP * Math.min(1, Math.max(0, (1 - t) / 0.12));
+let W = 0, H = 0, aspect = 1;
+
+const VERT = `#version 300 es
+in vec2 aPos; out vec2 vUv;
+void main(){ vUv = aPos*0.5+0.5; gl_Position = vec4(aPos,0.,1.); }`;
+
+const NOISE = `
+float hash(vec2 p){ p = fract(p*vec2(123.34,456.21)); p += dot(p,p+45.32); return fract(p.x*p.y); }
+float vnoise(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f);
+  return mix(mix(hash(i),hash(i+vec2(1,0)),f.x), mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x), f.y); }
+float fbm(vec2 p){ float a=.5, s=0.; for(int i=0;i<4;i++){ s+=a*vnoise(p); p=p*2.03+17.1; a*=.5; } return s/.9375; }
+`;
+
+/* One step of the paint. Texture A = wet paint (cyan, magenta, yellow amounts + water). Texture B = paint that has dried into the paper. */
+const STEP = `#version 300 es
+precision highp float;
+uniform sampler2D uA, uB, uC;   // uC = metallic paint lying on the paper (gold, silver, copper amounts)
+uniform vec2 uTexel; uniform float uTime, uAspect;
+uniform vec4 uBrush[4];      // x, y, radius, water added per step
+uniform vec4 uBrushCol[4];   // pigment added per step
+uniform vec4 uBrushMetal[4]; // gold, silver, copper, and where a chord change can gild a wash edge
+uniform vec4 uBrushDir[4];   // direction x, direction y, 1 = dry bristles, edge hardness
+uniform float uDamp;         // how damp the whole sheet is
+uniform float uDw, uDp, uEvap, uDep, uLift, uGrav, uSwirl, uOut;
+in vec2 vUv;
+layout(location=0) out vec4 oA; layout(location=1) out vec4 oB; layout(location=2) out vec4 oC;
+${NOISE}
+void main(){
+  vec2 px = vUv/uTexel;
+  float h = fbm(px*0.03);          // how thirsty this patch of paper is
+  float fine = vnoise(px*0.8);     // paper tooth
+  float dl = uDamp*(0.75+0.5*h);   // the sheet's own dampness here
+  float wc = texture(uA, vUv).a;
+  float wl = texture(uA, vUv-vec2(uTexel.x,0.)).a, wr = texture(uA, vUv+vec2(uTexel.x,0.)).a;
+  float wd = texture(uA, vUv-vec2(0.,uTexel.y)).a, wu = texture(uA, vUv+vec2(0.,uTexel.y)).a;
+  vec2 grad = vec2(wr-wl, wu-wd)*0.5;
+  // slow drifting currents inside the wet paint, plus gravity pulling very wet paint down the page
+  vec2 q = px*0.011 + vec2(0., uTime*0.00035);
+  float e = 0.6;
+  vec2 curl = vec2(vnoise(q+vec2(0.,e))-vnoise(q-vec2(0.,e)), vnoise(q-vec2(e,0.))-vnoise(q+vec2(e,0.)));
+  vec2 vel = curl*uSwirl*min(max(wc-dl,0.)*1.5+0.12,1.2) + vec2(0.,-uGrav)*smoothstep(0.6,1.5,wc);
+  vec2 base = vUv - vel*uTexel;
+  float w = texture(uA, base).a;
+  vec2 og = grad; float gmag = length(og); if (gmag > 0.5) og *= 0.5/gmag;
+  vec3 p = texture(uA, base + uOut*og*uTexel).rgb;   // pigment is carried outward toward the wet edge
+  // water creeps into dry paper; the creep is faster where the water is deep, which keeps a crisp wet edge
+  float lap = wl*wl + wr*wr + wu*wu + wd*wd - 4.*wc*wc;
+  w += uDw*lap*mix(0.2,1.,h);
+  // wet colours bleed into each other
+  vec3 pn = (texture(uA, base-vec2(uTexel.x,0.)).rgb + texture(uA, base+vec2(uTexel.x,0.)).rgb
+           + texture(uA, base-vec2(0.,uTexel.y)).rgb + texture(uA, base+vec2(0.,uTexel.y)).rgb)*0.25;
+  float we = max(w-dl, 0.);        // water above the sheet's dampness: this is what carries paint
+  p = mix(p, pn, uDp*clamp(we+0.3*step(0.01,dl),0.,1.));
+  // metallic paint is heavy: it does not drift, it only softens a little at its edges while the water on it is fresh
+  vec3 mt = texture(uC, vUv).rgb;
+  float chordGold = texture(uC, vUv).a;
+  vec3 mn = (texture(uC, vUv-vec2(uTexel.x,0.)).rgb + texture(uC, vUv+vec2(uTexel.x,0.)).rgb
+           + texture(uC, vUv-vec2(0.,uTexel.y)).rgb + texture(uC, vUv+vec2(0.,uTexel.y)).rgb)*0.25;
+  mt = mix(mt, mn, 0.03*clamp(we,0.,1.));
+  // brushes
+  for (int i=0;i<4;i++){
+    vec4 b = uBrush[i];
+    if (b.z > 0.){
+      vec2 d = (vUv-b.xy)*vec2(uAspect,1.);
+      float n = fbm(px*0.045 + float(i)*7.3);
+      vec4 sd = uBrushDir[i];
+      float wob = mix(0.6, 0.1, sd.w);
+      float dist = length(d)*(1.-wob*0.5+wob*n);
+      if (sd.z < 0.) {
+        vec2 alongBrush = vec2(dot(d, sd.xy), dot(d, vec2(-sd.y, sd.x)));
+        alongBrush.x *= mix(1.05, 0.64, smoothstep(-b.z, b.z, alongBrush.x)) / -sd.z;
+        float a = atan(alongBrush.y, alongBrush.x + 0.000001);
+        float rim = 1. + 0.15*sin(5.*a + 3.*n) + 0.09*sin(9.*a - 5.*n);
+        dist = length(alongBrush) * mix(0.82, 1.18, n) / rim;
+      }
+      float m = smoothstep(b.z, b.z*mix(0.45,0.88,sd.w), dist)*(0.55+0.45*fine);
+      if (sd.z > 0.5) {              // dry brush: separate bristle streaks that skip over the paper's bumps
+        float across = dot(d, vec2(-sd.y, sd.x))/b.z;
+        float along = dot(vUv*vec2(uAspect,1.), sd.xy);
+        float bris = vnoise(vec2(across*9.+float(i)*3.1, along*13.));
+        m *= smoothstep(0.4,0.58,bris)*smoothstep(0.3,0.7,fine+0.2);
+      }
+      w += b.w*m;
+      p += uBrushCol[i].rgb*m;
+      float goldCore = sd.z < 0. ? 1.-smoothstep(b.z*0.38, b.z*0.94, dist) : 1.;
+      mt += uBrushMetal[i].rgb*m*goldCore;
+      chordGold = max(chordGold, uBrushMetal[i].a * (1. - smoothstep(b.z, 2.1*b.z, dist)));
+    }
+  }
+  w = clamp(max(w - uEvap*(0.6+0.8*h), min(w, dl)), 0., 2.);
+  we = max(w-dl, 0.);
+  // paint settles into the paper, fastest where the water is thin (this makes the darker edges)
+  vec3 dried = texture(uB, vUv).rgb;
+  float thin = 1.-smoothstep(0.,0.35,we);
+  float rate = uDep*(1.+5.*thin);
+  if (w < 0.004) rate = 0.12;
+  vec3 dep = p*min(rate,1.);
+  p -= dep; dried += dep;
+  // new water lifts a little dried paint back up, so colours laid on top of each other mix
+  vec3 lift = dried*uLift*clamp(we,0.,1.);
+  dried -= lift; p += lift;
+  oA = vec4(min(p, vec3(3.)), w);
+  oB = vec4(min(dried, vec3(4.)), 1.);
+  oC = vec4(min(mt, vec3(3.)), chordGold);
+}`;
+
+const SHOW = `#version 300 es
+precision highp float;
+uniform sampler2D uA, uB, uC; uniform vec2 uTexel, uVein; uniform float uDamp, uTime, uProg, uSeed, uVeinAmt, uLook, uLocalGold;
+in vec2 vUv; out vec4 o;
+${NOISE}
+void main(){
+  vec2 px = vUv/uTexel;
+  vec4 a = texture(uA, vUv); vec3 dried = texture(uB, vUv).rgb;
+  float grain = fbm(px*0.9);
+  float tooth = vnoise(px*2.3);
+  vec3 dens = dried*(0.72+0.56*grain) + a.rgb*0.9;
+  vec3 paper = vec3(0.985,0.978,0.962) - 0.03*(tooth-0.5) - 0.02*(fbm(px*0.02)-0.5);
+  // each pigment soaks up its opposite light: cyan takes red, magenta takes green, yellow takes blue
+  vec3 k = vec3(dens.r*2.0 + dens.g*0.06, dens.g*1.9 + dens.r*0.2 + dens.b*0.03, dens.b*2.0 + dens.g*0.05);
+  vec3 col = paper*exp(-k);
+  col = mix(vec3(dot(col, vec3(0.3,0.59,0.11))), col, 1.3);   // keep the colours clear, not dusty
+  col *= 1. - 0.07*smoothstep(0.02,0.6,a.a-uDamp*1.25);       // wet paint looks a touch deeper
+  // optional looks for the coloured paint itself (?look=pearl or ?look=shift); off unless asked for
+  if (uLook > 0.5) {
+    float paint = 1.-exp(-(dens.r+dens.g+dens.b)*1.6);
+    float gl = fbm(px*0.03 + vec2(uTime*0.0005, -uTime*0.0003));
+    float hl = smoothstep(0.45, 0.8, gl + 0.25*(vnoise(px*2.1)-0.5));
+    vec3 tint = vec3(1.,0.97,0.92);                       // pearl: a soft white-gold sheen on the colour
+    if (uLook > 1.5) tint = mix(vec3(1.), 0.6+0.4*cos(6.283*(gl*9. + px.y*0.01 + vec3(0.,0.33,0.67))), 0.75);   // shift: the sheen changes hue
+    col *= 1. - 0.12*paint*(1.-hl);
+    col = mix(col, mix(col, vec3(1.), 0.55)*tint, hl*paint*0.75);
+  }
+  // metallic paint: fine gold lines and dots laid by the brush, plus gold that gathers along the edges of the washes
+  vec3 mt = texture(uC, vUv).rgb; float ma = mt.r+mt.g+mt.b;
+  vec2 e1 = uTexel*1.5;
+  float dR = dot(texture(uB, vUv+vec2(e1.x,0.)).rgb + texture(uA, vUv+vec2(e1.x,0.)).rgb, vec3(1.));
+  float dL = dot(texture(uB, vUv-vec2(e1.x,0.)).rgb + texture(uA, vUv-vec2(e1.x,0.)).rgb, vec3(1.));
+  float dU = dot(texture(uB, vUv+vec2(0.,e1.y)).rgb + texture(uA, vUv+vec2(0.,e1.y)).rgb, vec3(1.));
+  float dD = dot(texture(uB, vUv-vec2(0.,e1.y)).rgb + texture(uA, vUv-vec2(0.,e1.y)).rgb, vec3(1.));
+  float edge = length(vec2(dR-dL, dU-dD));
+  float ramp = smoothstep(0.42, 0.92, uProg);               // the gold edges creep in during the second half
+  float region = smoothstep(0., 0.07, fbm(px*0.007 + uSeed) - mix(0.95, uVeinAmt, ramp));   // only some edges, in patches
+  float vein = smoothstep(uVein.x, uVein.y, edge)*mix(region, texture(uC, vUv).a * .9, uLocalGold);
+  float cover = max(smoothstep(0.03, 0.2, ma), vein);
+  if (cover > 0.002) {
+    vec3 gold = vec3(0.83,0.69,0.36);                                  // a pale, warm gold, not ochre
+    vec3 mc = (mt.r*gold + mt.g*vec3(0.74,0.77,0.82) + mt.b*vec3(0.80,0.50,0.32) + gold*vein*0.3)/(ma + vein*0.3);
+    // metallic pigment: the same paint looks deep gold where the light misses it and pale and bright where it catches,
+    // changing smoothly along a line, with a fine even shimmer from the mica in the paint
+    float glint = fbm(px*0.045 + vec2(uTime*0.0006, -uTime*0.0004));
+    float mica = vnoise(px*2.1 + uTime*0.003);
+    float l = clamp((glint-0.5)*2.6 + 0.5 + 0.22*(mica-0.5), 0., 1.);
+    vec3 metal = mix(mc*vec3(0.74,0.66,0.5), mc, smoothstep(0.,0.5,l));
+    metal = mix(metal, vec3(1.,0.95,0.74), smoothstep(0.5,1.,l)*0.8);
+    col = mix(col, metal, cover*0.96);
+  }
+  o = vec4(col, 1.);
+}`;
+
+function shader(type, src) { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; }
+function program(fs) { const p = gl.createProgram(); gl.attachShader(p, shader(gl.VERTEX_SHADER, VERT)); gl.attachShader(p, shader(gl.FRAGMENT_SHADER, fs));
+  gl.bindAttribLocation(p, 0, 'aPos'); gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  const u = {}; const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+  for (let i = 0; i < n; i++) { const name = gl.getActiveUniform(p, i).name.replace('[0]', ''); u[name] = gl.getUniformLocation(p, name); }
+  return { p, u }; }
+const stepP = program(STEP), showP = program(SHOW);
+const quad = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+let sets = [], cur = 0;
+function tex() { const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, W, H, 0, gl.RGBA, gl.HALF_FLOAT, null);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE); return t; }
+function makeSets() {
+  for (const s of sets) { gl.deleteTexture(s.a); gl.deleteTexture(s.b); gl.deleteTexture(s.c); gl.deleteFramebuffer(s.f); }
+  sets = [0, 1].map(() => { const a = tex(), b = tex(), c = tex(), f = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, f);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, a, 0);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, b, 0);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT2, gl.TEXTURE_2D, c, 0);
+    gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2]);
+    gl.clearColor(0, 0, 0, DAMP); gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.clearBufferfv(gl.COLOR, 2, [0, 0, 0, 0]);
+    return { a, b, c, f }; });   // blank, evenly wet sheet
+  cur = 0;
+}
+function size(keepPaint = false) {
+  const cw = Math.max(200, innerWidth), ch = Math.max(200, innerHeight), long = 760;
+  if (!keepPaint) {
+    aspect = cw / ch;
+    W = Math.round(aspect >= 1 ? long : long * aspect); H = Math.round(aspect >= 1 ? long / aspect : long);
+  }
+  const dpr = Math.min(2, devicePixelRatio || 1);
+  glc.width = Math.round(cw * dpr); glc.height = Math.round(ch * dpr);
+  inkc.width = glc.width; inkc.height = glc.height;
+}
+
+/* ---------- the plan for the painting ---------- */
+function rng(seed) { let a = seed >>> 0; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a);
+  t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+// paints as cyan / magenta / yellow amounts
+const PAINTS = { blue: [1.0, 0.5, 0.0], cerulean: [0.85, 0.12, 0.05], turquoise: [0.7, 0.0, 0.28], rose: [0.0, 0.95, 0.3],
+                 red: [0.0, 0.95, 0.75], orange: [0.0, 0.6, 1.0], yellow: [0.0, 0.04, 0.9], green: [0.55, 0.0, 0.85] };
+const VEIN = (qs.get('vein') || '0.06,0.14,0.5').split(',').map(Number);   // gold along wash edges: edge sharpness needed (from, to), how widespread
+const LOOK = { pearl: 1, shift: 2 }[qs.get('look')] || 0, MIXED = qs.get('metals') === 'mixed';   // trial looks, off by default
+// Gold has one style per music mode: notes = gold rings and discs, pitch = thin gold lines, rhythm = short gold lines,
+// harmony = gold along the edges of washes. With no mode chosen the painting uses lines, dots and edges together.
+// Choose with ?gold=notes|pitch|rhythm|harmony or window.watercolor.start({gold: 'pitch'}).
+let autoPlan = qs.get('auto') !== '0';
+let goldMode = null, G_LINE, G_DOT, G_EDGE, G_RING, veinExtra = 0;
+function setGold(m) { goldMode = ['notes', 'pitch', 'rhythm', 'harmony'].includes(m) ? m : null;
+  G_LINE = !goldMode || goldMode === 'pitch' || goldMode === 'rhythm'; G_DOT = !goldMode; G_EDGE = !goldMode || goldMode === 'harmony'; G_RING = goldMode === 'notes'; }
+setGold(qs.get('gold'));
+let rings = [];
+const METALS = { gold: [1, 0, 0], silver: [0, 1, 0], copper: [0, 0, 1] };
+let duration = Math.max(20, parseFloat(qs.get('dur')) || 240), seed = parseInt(qs.get('seed')) || 7;
+let totalSteps = 0, strokes = [], extra = [], inkLines = [], step = 0, playing = true, holdAt = null, target = 0, last = 0, clock = 0;
+let externalClock = false;
+
+function plan() {
+  const r = rng(seed * 7919 + 13), rm = rng(seed * 31 + 5);   // rm decides only where the metallic paint goes
+  totalSteps = Math.round(duration * STEPS_PER_SEC);
+  const n = Math.max(12, Math.min(70, Math.round(duration / 7)));
+  const scale = Math.sqrt(34 / n);
+  // the arrangement: a large blue wash through the middle, red-pink above, yellow and green below, white paper around it.
+  // Each painting shifts these colour "homes" a little and may mirror them left to right. "from" = when that colour joins in.
+  const flip = r() < 0.5, J = () => (r() - 0.5) * 0.12;
+  const homes = [['blue', 0.50, 0.56, 0], ['blue', 0.40, 0.44, 0], ['cerulean', 0.60, 0.50, 0], ['blue', 0.52, 0.48, 0.1],
+                 ['rose', 0.44, 0.82, 0.18], ['red', 0.62, 0.78, 0.3], ['yellow', 0.34, 0.26, 0.36], ['green', 0.60, 0.20, 0.48],
+                 ['turquoise', 0.70, 0.36, 0.56], ['yellow', 0.26, 0.40, 0.62]]
+    .map(h => ({ c: h[0], x: (flip ? 1 - h[1] : h[1]) + J(), y: h[2] + J(), from: h[3] }));
+  strokes = [];
+  const R = (lo, hi) => lo + (hi - lo) * r();
+  for (let i = 0; i < n; i++) {
+    const f = i / (n - 1);
+    const open = homes.filter(h => h.from <= f);
+    // a colour that has just joined gets the next stroke more often, so each arrival is seen
+    const fresh = open.filter(h => h.from > f - 0.1 && h.from > 0);
+    const home = fresh.length && r() < 0.6 ? fresh[Math.floor(r() * fresh.length)] : open[Math.floor(r() * open.length)];
+    // which brush: broad washes first, then more kinds of brush join in as the song goes on
+    let kind = 'wash';
+    if (f >= 0.16) {
+      const opts = [['round', 3], ['wash', f < 0.5 ? 0.5 : 0.15], ['bloom', f > 0.3 ? 0.9 : 0], ['drip', f > 0.22 ? 1.1 : 0], ['dry', f > 0.3 ? 2 : 0],
+                    ['splatter', f > 0.45 ? 1.0 : 0], ['line', f > 0.55 ? 1.6 : 0]];
+      let pick = r() * opts.reduce((a, o) => a + o[1], 0);
+      for (const o of opts) { pick -= o[1]; if (pick <= 0) { kind = o[0]; break; } }
+    }
+    const K = { wash:     { rad: R(0.10, 0.16) * scale, len: R(0.3, 0.6), steps: R(420, 800), water: R(1.3, 1.7), load: R(0.6, 1.0), hard: 0 },
+                round:    { rad: R(0.04, 0.08) * scale, len: R(0.15, 0.5),  steps: R(260, 560), water: R(1.1, 1.5), load: R(1.0, 1.6), hard: 0.2 },
+                dry:      { rad: R(0.04, 0.07), len: R(0.25, 0.5), steps: R(200, 320), water: 0.2, load: R(0.6, 1.0), hard: 0.6, dry: 1 },
+                drip:     { rad: R(0.004, 0.0065), len: R(0.2, 0.42), steps: R(600, 1000), water: 1.2, load: 1.0, hard: 0.3 },
+                splatter: { rad: 0.01, len: 0, steps: 0, water: 1.0, load: 0.9, hard: 0.15 },
+                line:     { rad: R(0.006, 0.01), len: R(0.3, 0.6), steps: R(300, 500), water: 0.45, load: 2.6, hard: 0.9 },
+                bloom:    { rad: R(0.035, 0.065), len: 0.004, steps: 130, water: 1.9, load: 0, hard: 0.1 } }[kind];
+    // in the second half, some marks are made in metallic paint: fine flowing gold lines, thin gold drips and small gold dots
+    let metal = null;
+    if (f > 0.4 && kind !== 'wash' && kind !== 'bloom' && (kind === 'splatter' ? G_DOT : G_LINE) && rm() < (goldMode ? 0.7 : 0.32)) {
+      const pick = rm(); metal = METALS[MIXED ? (pick < 0.34 ? 'gold' : pick < 0.67 ? 'silver' : 'copper') : pick < 0.85 ? 'gold' : 'copper'];
+      if (kind === 'round' || kind === 'dry') { K.rad = 0.0028 + 0.0022 * rm(); K.len = Math.max(K.len, 0.4); K.steps = 500; K.water = 0.4; K.hard = 0.8; K.dry = 0; }
+      if (kind !== 'splatter') K.taper = 1 + 2 * rm();
+      if (kind === 'splatter') K.hard = 0.75;
+    }
+    const sp = kind === 'wash' ? 0.16 : 0.3;
+    let x = home.x + (r() - 0.5) * sp, y = home.y + (r() - 0.5) * sp + (kind === 'drip' ? 0.08 : 0);
+    const pts = [], rads = [];
+    if (kind === 'splatter') {        // a flick of the brush: many small drops scattered around one spot
+      const drops = 9 + Math.floor(r() * 9), spread = R(0.05, 0.11);
+      for (let k = 0; k < drops; k++) { const a = r() * 6.283, d = spread * Math.sqrt(r());
+        pts.push([x + Math.cos(a) * d / aspect, y + Math.sin(a) * d]); rads.push(R(0.003, 0.009)); }
+      K.steps = drops * 26;
+    } else {
+      let ang = kind === 'drip' ? -1.57 : r() * Math.PI * 2;
+      const bend = (r() - 0.5) * (kind === 'drip' ? 0.3 : metal ? 7 : kind === 'line' ? 2 : 3), wob = r() * 6.28;   // gold lines curl
+      const sway = kind === 'drip' ? 0.13 : 0.35;
+      for (let k = 0; k <= 48; k++) { const u = k / 48; pts.push([x, y]);
+        const a = ang + bend * u + sway * Math.sin(wob + u * 7);
+        x += Math.cos(a) * K.len / 48 / aspect; y += Math.sin(a) * K.len / 48; }
+    }
+    const steps = Math.round(K.steps);
+    const dwell = kind === 'splatter' ? 26 : Math.min(steps, Math.max(40, 2 * K.rad / (K.len / steps)));
+    const c = PAINTS[home.c];
+    strokes.push({ kind, t0: Math.round((0.012 + 0.9 * f + (r() - 0.5) * 0.4 / n) * totalSteps), steps, pts, rads, rad: K.rad,
+                   hard: K.hard, dry: K.dry || 0, taper: K.taper || 0, wr: K.water / dwell,
+                   col: c.map(v => metal ? 0 : v * K.load / dwell), metal: (metal || [0, 0, 0]).map(v => v * 2.6 / dwell) });
+  }
+  // trial "notes" look: gold rings gathered at one home spot, with a few small gold discs elsewhere
+  rings = [];
+  if (G_RING) { const hx = 0.3 + 0.4 * rm(), hy = 0.35 + 0.3 * rm();
+    for (let k = 0; k < 5; k++) rings.push({ x: hx + (rm() - 0.5) * 0.03, y: hy + (rm() - 0.5) * 0.03, r: 0.018 + 0.017 * k, t0: 0.4 + 0.1 * k, fill: false });
+    for (let k = 0; k < 7; k++) rings.push({ x: 0.12 + 0.76 * rm(), y: 0.15 + 0.7 * rm(), r: 0.006 + 0.012 * rm(), t0: 0.42 + 0.5 * rm(), fill: rm() < 0.6 }); }
+  // a few bundles of fine pen lines, drawn in during the second half
+  inkLines = [];
+  const bundles = 3 + Math.floor(r() * 2);
+  for (let b = 0; b < bundles; b++) {
+    const x0 = 0.15 + 0.5 * r(), y0 = 0.15 + 0.3 * r(), x3 = x0 + 0.2 + 0.4 * r(), y3 = 0.6 + 0.3 * r();
+    const c1 = [x0 + 0.3 * r(), y0 + 0.1 * r()], c2 = [x3 - 0.25 * r(), y3 - 0.35 * r()];
+    const count = b === 0 ? 5 : 1 + Math.floor(r() * 2), t0 = 0.42 + 0.4 * r();
+    for (let k = 0; k < count; k++) { const o = k * 0.014, j = () => (r() - 0.5) * 0.02;
+      inkLines.push({ p: [[x0 + o + j(), y0 - o * 0.6], [c1[0] + o * 1.5, c1[1] - o + j()], [c2[0] + o * 0.6 + j(), c2[1] - o * 1.4], [x3 + o * 0.3, y3 + j()]],
+                      t0: t0 + k * 0.012, dt: 0.07 + 0.04 * r(), dot: r() < 0.5, gold: b > 0 }); }
+  }
+}
+
+function runSteps(count) {
+  gl.useProgram(stepP.p); gl.viewport(0, 0, W, H);
+  const u = stepP.u;
+  gl.uniform2f(u.uTexel, 1 / W, 1 / H); gl.uniform1f(u.uAspect, aspect);
+  gl.uniform1f(u.uDw, 0.075); gl.uniform1f(u.uDp, 0.22); gl.uniform1f(u.uEvap, 0.0003); gl.uniform1f(u.uDep, 0.0016);
+  gl.uniform1f(u.uLift, 0.0004); gl.uniform1f(u.uGrav, 0.11); gl.uniform1f(u.uSwirl, 0.55); gl.uniform1f(u.uOut, 0.9);
+  gl.uniform1i(u.uA, 0); gl.uniform1i(u.uB, 1); gl.uniform1i(u.uC, 2);
+  const br = new Float32Array(16), bc = new Float32Array(16), bd = new Float32Array(16), bm = new Float32Array(16);
+  for (let s = 0; s < count && step < totalSteps; s++, step++) {
+    br.fill(0); bc.fill(0); bd.fill(0); bm.fill(0); let k = 0;
+    for (const st of strokes) {
+      if (k >= 4) break;
+      const q = (step - st.t0) / st.steps;
+      if (q < 0 || q >= 1) continue;
+      if (st.kind === 'splatter') {
+        const f = q * st.pts.length, i = Math.min(st.pts.length - 1, Math.floor(f)), m = f - i, press = m < 0.75 ? 1 : 0;
+        const [x, y, opacity = 1, dx = 1, dy = 0, stretch = 0] = st.pts[i];
+        br.set([x, y, st.rads[i], st.wr * press], k * 4);
+        bc.set([st.col[0] * press * opacity, st.col[1] * press * opacity, st.col[2] * press * opacity, 0], k * 4);
+        bm.set([st.metal[0] * press * opacity, st.metal[1] * press, st.metal[2] * press, 0], k * 4);
+        bd.set([dx, dy, -stretch, st.hard], k * 4);
+        k++;
+        continue;
+      }
+      const f = q * (st.pts.length - 1), i = Math.floor(f), m = f - i, a = st.pts[i], b = st.pts[Math.min(i + 1, st.pts.length - 1)];
+      const press = Math.min(1, q * 8) * Math.min(1, (1 - q) * 6);     // brush lands and lifts gently
+      let dx = (b[0] - a[0]) * aspect, dy = b[1] - a[1]; const dl = Math.hypot(dx, dy) || 1;
+      br.set([a[0] + (b[0] - a[0]) * m, a[1] + (b[1] - a[1]) * m, st.rad * (0.75 + 0.25 * press) * (st.taper ? 0.45 + 0.75 * Math.abs(Math.sin(q * Math.PI * st.taper + 0.6)) : 1), st.wr * press], k * 4);   // gold lines swell and thin like a loaded brush
+      bc.set([st.col[0] * press, st.col[1] * press, st.col[2] * press, 0], k * 4);
+      bm.set([st.metal[0] * press, st.metal[1] * press, st.metal[2] * press, 0], k * 4);
+      bd.set([dx / dl, dy / dl, st.dry, st.hard], k * 4); k++;
+    }
+    for (let j = extra.length - 1; j >= 0 && k < 4; j--) {
+      const x = extra[j]; br.set([x.x, x.y, x.rad, x.wr], k * 4); bc.set([x.col[0], x.col[1], x.col[2], 0], k * 4); bm.set([x.metal[0], x.metal[1], x.metal[2], x.goldEdge], k * 4); k++;
+      if (--x.left <= 0) extra.splice(j, 1);
+    }
+    gl.uniform4fv(u.uBrush, br); gl.uniform4fv(u.uBrushCol, bc); gl.uniform4fv(u.uBrushDir, bd); gl.uniform4fv(u.uBrushMetal, bm);
+    gl.uniform1f(u.uTime, step); gl.uniform1f(u.uDamp, dampAt(step / totalSteps));
+    const src = sets[cur], dst = sets[1 - cur];
+    gl.bindFramebuffer(gl.FRAMEBUFFER, dst.f);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, src.a);
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, src.b);
+    gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, src.c);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    cur = 1 - cur;
+  }
+}
+
+function draw() {
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, glc.width, glc.height);
+  gl.useProgram(showP.p);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, sets[cur].a);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, sets[cur].b);
+  gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, sets[cur].c);
+  gl.uniform1i(showP.u.uA, 0); gl.uniform1i(showP.u.uB, 1); gl.uniform1i(showP.u.uC, 2); gl.uniform1f(showP.u.uTime, step);
+  gl.uniform1f(showP.u.uLook, LOOK); gl.uniform1f(showP.u.uProg, step / totalSteps); gl.uniform1f(showP.u.uSeed, (seed % 97) * 3.1);
+  gl.uniform1f(showP.u.uLocalGold, Number(externalClock && G_EDGE));
+  gl.uniform2f(showP.u.uVein, G_EDGE ? VEIN[0] : 9, G_EDGE ? VEIN[1] : 10); gl.uniform1f(showP.u.uVeinAmt, Math.max(0.3, (goldMode === 'harmony' ? 0.4 : VEIN[2]) - veinExtra)); gl.uniform2f(showP.u.uTexel, 1 / W, 1 / H); gl.uniform1f(showP.u.uDamp, dampAt(step / totalSteps));
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  // pen lines
+  const c = inkc.getContext('2d'), w = inkc.width, h = inkc.height, t = step / totalSteps;
+  c.clearRect(0, 0, w, h); c.lineCap = 'round'; c.strokeStyle = 'rgba(28,48,110,0.55)'; c.fillStyle = 'rgba(28,48,110,0.6)';
+  c.lineWidth = Math.max(1, h / 900);
+  for (const L of inkLines) {
+    const q = Math.min(1, (t - L.t0) / L.dt); if (q <= 0 || (L.gold && !G_LINE)) continue;
+    if (L.gold) { const g = c.createLinearGradient(0, 0, w, h);        // gold pen: a soft shine along the line
+      for (let i = 0; i <= 8; i++) g.addColorStop(i / 8, i % 2 ? 'rgba(244,224,160,0.95)' : 'rgba(176,138,62,0.95)');
+      c.strokeStyle = g; c.lineWidth = Math.max(1.4, h / 560);
+    } else { c.strokeStyle = 'rgba(28,48,110,0.55)'; c.lineWidth = Math.max(1, h / 900); }
+    c.beginPath(); let px = 0, py = 0;
+    const N = 90, end = Math.round(N * q);
+    for (let i = 0; i <= end; i++) { const s = i / N, m = 1 - s, P = L.p;
+      px = (m*m*m*P[0][0] + 3*m*m*s*P[1][0] + 3*m*s*s*P[2][0] + s*s*s*P[3][0]) * w;
+      py = (1 - (m*m*m*P[0][1] + 3*m*m*s*P[1][1] + 3*m*s*s*P[2][1] + s*s*s*P[3][1])) * h;
+      if (i) c.lineTo(px, py); else c.moveTo(px, py); }
+    c.stroke();
+    if (L.dot && q >= 1) { c.beginPath(); c.ellipse(px, py, h / 130, h / 190, 0.4, 0, 6.3); c.stroke(); }
+  }
+  if (rings.length) { const g = c.createLinearGradient(0, 0, w, h);
+    for (let i = 0; i <= 8; i++) g.addColorStop(i / 8, i % 2 ? 'rgba(244,224,160,0.95)' : 'rgba(176,138,62,0.95)');
+    c.strokeStyle = g; c.fillStyle = g; c.lineWidth = Math.max(1.6, h / 420);
+    for (const R of rings) {
+      if (R.note) {
+        const opened = R.heldAt == null ? 0 : Math.min(1, Math.max(0, (step - R.heldAt) / 12));
+        c.beginPath();
+        c.arc(R.x * w, (1 - R.y) * h, R.r * h * (1 + 1.55 * opened), 0, Math.PI * 2);
+        c.globalAlpha = 1 - opened;
+        c.fill();
+        c.globalAlpha = opened;
+        c.stroke();
+        c.globalAlpha = 1;
+        continue;
+      }
+      const q = Math.min(1, (t - R.t0) / 0.04); if (q <= 0) continue;
+      c.beginPath(); c.arc(R.x * w, (1 - R.y) * h, R.r * h, -1.2, -1.2 + 6.283 * q); R.fill && q >= 1 ? c.fill() : c.stroke(); } }
+  document.querySelector('#prog i').style.width = (100 * t).toFixed(1) + '%';
+}
+
+function frame(now) {
+  requestAnimationFrame(frame);
+  // the painting follows a real clock, so it stays in time with a song even if the browser stalls or slows the page
+  if (!externalClock && playing && target < totalSteps) { clock += (now - last) / 1000;
+    target = Math.max(target, Math.min(totalSteps, Math.floor(clock * STEPS_PER_SEC))); }
+  last = now;
+  if (step < target) {
+    runSteps(Math.min(externalClock ? 8 : 240, target - step));
+    draw();
+  }
+}
+
+function start(o) {
+  o = o || {};
+  if (o.externalClock !== undefined) externalClock = o.externalClock;
+  if (Number.isFinite(o.duration) && o.duration > 0) duration = Math.max(externalClock ? 1 : 20, o.duration);
+  if (o.seed != null) seed = o.seed;
+  if (o.gold !== undefined) setGold(o.gold);
+  if (o.auto !== undefined) autoPlan = o.auto !== false;
+  veinExtra = 0;
+  size(); makeSets();
+  if (autoPlan) plan();
+  else { totalSteps = Math.round(duration * STEPS_PER_SEC); strokes = []; inkLines = []; rings = []; }
+  step = 0; target = 0; clock = 0; extra = []; playing = true;
+  document.getElementById('play').textContent = 'Pause';
+  draw();
+}
+const stepAt = fraction => Math.round(Math.max(0, Math.min(1, fraction)) * totalSteps);
+function seek(fraction) {
+  const to = stepAt(fraction);
+  if (to < step) {
+    makeSets(); step = 0; extra = [];
+    if (externalClock) { strokes = []; rings = []; inkLines = []; veinExtra = 0; }
+  }
+  target = to; clock = to / STEPS_PER_SEC;
+  if (externalClock) { step = to; extra = []; }
+  draw();
+}
+function follow(fraction) {
+  target = Math.max(step, stepAt(fraction));
+}
+function snapshot() {
+  const canvas = document.createElement('canvas');
+  canvas.width = glc.width; canvas.height = glc.height;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(glc, 0, 0);
+  ctx.drawImage(inkc, 0, 0);
+  return canvas;
+}
+function setPlaying(v) { playing = v; document.getElementById('play').textContent = v ? 'Pause' : 'Play'; }
+function addStroke(o) {
+  const rad = o.size || 0.06, n = Math.round((o.seconds || 1.5) * STEPS_PER_SEC), c = o.color || PAINTS.blue, mt = METALS[o.metal];
+  extra.push({ x: o.x, y: o.y, rad, wr: (o.water || 1.1) / n, col: c.map(v => mt ? 0 : v * (o.strength || 0.8) / n),
+               metal: (mt || [0, 0, 0]).map(v => v * (o.strength || 1.2) / n), goldEdge: Number(!!o.goldEdge), left: n });
+}
+// Gold added from outside (for example by music), in the style of one music mode. x and y run 0 to 1 from the bottom-left corner.
+//   gold('notes', {x, y, size, fill})   a gold ring (or a filled disc) drawn at that spot
+//   gold('pitch', {x, y, angle, length}) a thin gold line that starts there and curls away (angle in turns: 0.25 = straight up)
+//   gold('rhythm', {x, y, angle, length}) a short gold line
+//   gold('harmony', {amount})           lets gold gather along more of the wash edges
+function gold(style, o) {
+  o = o || {}; const x = o.x == null ? 0.5 : o.x, y = o.y == null ? 0.5 : o.y, rr = rng((step + 1) * 40503 + strokes.length);
+  if (style === 'notes') {
+    const mark = {x, y, r: o.size || 0.02, t0: step / totalSteps, fill: !!o.fill, note: externalClock};
+    rings.push(mark);
+    return () => { mark.heldAt = step; };
+  }
+  if (style === 'pitch' && o.spread > 0) {
+    const spread = o.spread;
+    const direction = ((o.angle ?? .25) + (rr() - .5) * .14) * Math.PI * 2;
+    const edge = o.edge || 0;
+    const pts = [], rads = [];
+    const deposit = (angle, distance, radius, opacity, stretch) => {
+      const dx = Math.cos(angle), dy = Math.sin(angle);
+      pts.push([x + distance * dx / aspect, y + distance * dy, opacity, dx, dy, stretch]);
+      rads.push(radius);
+    };
+    // A few larger drops sit near the wash, with finer drops scattered farther out.
+    for (let i = 0; i < 18; i++) {
+      const angle = direction + (rr() - .5) * 3.3;
+      const distance = (i + rr()) / 18;
+      const reach = spread * (.07 + distance);
+      const radius = (.0018 + .0036 * rr()) * (1.3 - .65 * distance);
+      deposit(angle, edge + reach, radius, .45 + .48 * rr(), .82 + .3 * rr());
+    }
+    const dwell = 2;
+    const ochre = [0, .32, .72];
+    strokes.push({
+      kind: 'splatter', t0: step, steps: pts.length * dwell, pts, rads,
+      hard: .52, wr: .65 / dwell, col: ochre.map(amount => amount * .42 / dwell),
+      metal: [.88 / dwell, 0, 0]
+    });
+    return;
+  }
+  const line = style === 'pitch' || style === 'rhythm' ? o : null;
+  if (line) { const len = line.length || 0.35, steps = externalClock ? 105 : 400;
+    const rad = (0.0028 + 0.0022 * rr()) * (externalClock ? 0.57 : 1), pts = [];
+    let px = x, py = y; const ang = (line.angle == null ? rr() : line.angle) * 6.283, bend = (rr() - 0.5) * (externalClock ? 1.2 : 7), wob = rr() * 6.28;
+    for (let k = 0; k <= 48; k++) { const u = k / 48; pts.push([px, py]); const a = ang + bend * u + 0.35 * Math.sin(wob + u * 7);
+      px += Math.cos(a) * len / 48 / aspect; py += Math.sin(a) * len / 48; }
+    const dwell = Math.max(externalClock ? 8 : 40, 2 * rad / (len / steps));
+    strokes.push({ kind: 'line', t0: step, steps, pts, rads: [], rad, hard: 0.8, dry: 0, taper: 1 + 2 * rr(), wr: 0.4 / dwell, col: [0, 0, 0], metal: [2.6 / dwell, 0, 0] });
+  } else if (style === 'harmony') veinExtra = Math.min(0.2, veinExtra + (o.amount || 0.03));
+}
+window.watercolor = { start, seek, follow, snapshot, addStroke, gold, paints: PAINTS, metals: Object.keys(METALS), pause: () => setPlaying(false), play: () => setPlaying(true),
+                      get progress() { return step / totalSteps; } };
+
+document.getElementById('play').onclick = () => setPlaying(!playing);
+document.getElementById('again').onclick = () => start();
+document.getElementById('fresh').onclick = () => start({ seed: Math.floor(Math.random() * 100000) });
+document.getElementById('len').onchange = e => { const m = e.target.value.trim().split(':');
+  const s = m.length > 1 ? (+m[0]) * 60 + (+m[1]) : +m[0]; if (s > 0) start({ duration: s }); };
+document.getElementById('len').value = Math.floor(duration / 60) + ':' + String(Math.round(duration % 60)).padStart(2, '0');
+let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => {
+  if (externalClock) { size(true); draw(); return; }
+  const f = step / totalSteps; start(); seek(f);
+}, 300); });
+
+start();
+if (qs.get('t') != null) { seek(parseFloat(qs.get('t'))); setPlaying(false); runSteps(target - step); draw(); gl.finish(); }   // jump straight there
+requestAnimationFrame(t => { last = t; frame(t); });
+})();
+</script>
+</body>
+</html>

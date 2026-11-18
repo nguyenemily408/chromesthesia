@@ -1,0 +1,1831 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Sound of Color · Artwork preview</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap">
+<style>
+  *{box-sizing:border-box}
+  :root{font:15px/1.4 "Instrument Sans",system-ui,sans-serif;color:#2a2522;--paper:#faf8f5;--line:#d9d3cb;--ink:#2b1e32;background:var(--paper)}
+  html,body{height:100%}
+  body{margin:0;display:flex;flex-direction:column;min-height:560px;background:var(--paper)}
+  .top{padding:12px 22px 0}
+  h1{font:italic normal clamp(1.7rem,3.4vw,2.4rem)/1.1 "Instrument Serif",Georgia,serif;letter-spacing:-.01em;margin:0 0 10px}
+  .bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding-bottom:10px;border-bottom:1px solid var(--line)}
+  fieldset{border:0;margin:0;padding:0}
+  #triggers{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff8}
+  label,button,select{font:inherit;color:var(--ink)}
+  #triggers label{padding:7px 18px;cursor:pointer;border-right:1px solid var(--line)}
+  #triggers label:last-child{border-right:0}
+  #triggers label:hover{background:#f1ece5}
+  #triggers label:has(:checked){background:#e9e3da;font-weight:600}
+  .pickers{display:flex;gap:8px;align-items:center}
+  .pickers span{font-size:.82rem;color:#6b625a}
+  select{padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;cursor:pointer}
+  input[type=radio],.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+  :focus-visible,label:has(:focus-visible){outline:2px solid #7832a1;outline-offset:2px}
+  main{flex:1;min-height:240px;margin:10px 22px 0;position:relative;overflow:hidden;border-radius:4px}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  #ref{position:absolute;inset:0;background:var(--paper);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;z-index:2}
+  #ref img{max-width:100%;max-height:calc(100% - 28px);object-fit:contain;border:1px solid var(--line)}
+  #ref b{font-size:.8rem;color:#7a1d1d;background:#f3d6d6;border-radius:6px;padding:2px 8px}
+  #panel{margin:0 22px;padding:10px 0;border-top:1px solid var(--line);min-height:82px;display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+  #lead{font-size:1.02rem;min-width:11em;max-width:20em}
+  #lead small{display:block;font-size:.8rem;color:#6b625a;margin-top:2px}
+  #legend{display:flex;gap:6px 18px;align-items:flex-start;flex-wrap:wrap;flex:1;border-left:1px solid var(--line);padding-left:18px;min-height:44px}
+  #legend.plain{border-left:0;padding-left:0}
+  .chip{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:.82rem}
+  .chip i{width:30px;height:30px;border-radius:50%;display:block}
+  .chip.row{flex-direction:row;gap:7px}.chip.row i{width:16px;height:16px}
+  #timeline{position:relative;flex:1;min-width:260px;height:48px}
+  #timeline .axis{position:absolute;left:0;right:0;top:12px;height:1px;background:#4a423c}
+  #timeline .tick{position:absolute;top:6px;width:1px;height:13px;background:#4a423c}
+  #timeline .lab{position:absolute;top:22px;transform:translateX(-50%);font-size:.88rem}
+  #timeline .head{position:absolute;top:6px;width:2px;height:13px;background:#c4342d;border-radius:1px;left:0}
+  #gradbar{width:220px;height:12px;border-radius:6px}
+  .badge{display:inline-block;font-size:.7rem;font-weight:700;letter-spacing:.05em;border-radius:6px;padding:1px 7px;margin-right:6px}
+  .badge.demo{background:#ffe9b8;color:#6a4300}.badge.est{background:#d9ecff;color:#0b4a82}.badge.na{background:#f3d6d6;color:#7a1d1d}
+  #source{margin:0 22px 8px;font-size:.84rem;color:#514754}
+  footer{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 22px;border-top:1px solid var(--line);background:#f6f3ee}
+  button{cursor:pointer;border:1px solid var(--line);border-radius:99px;background:#fff;padding:5px 13px}
+  button:hover{background:#f1ece5}
+  #play{background:var(--ink);color:#fff;border-color:var(--ink);min-width:6.5em}
+  #play:disabled{opacity:.6;cursor:wait}
+  #track{font-size:.9rem;max-width:20ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #seek{flex:1;min-width:140px;accent-color:#382343}
+  #clock{font-variant-numeric:tabular-nums;font-size:.88rem;min-width:8ch;text-align:right}
+  .note{margin-left:auto;font-style:italic;font-size:.8rem;color:#6b625a}
+  [hidden]{display:none!important}
+  /* full screen: the artwork fills the window; the controls float above it and slip away while music plays */
+  html,body{overflow:hidden}
+  main{position:fixed;inset:0;margin:0;border-radius:0;z-index:0}
+  .top,.dock{position:fixed;left:50%;transform:translateX(-50%);z-index:5;width:max-content;max-width:calc(100% - 24px);
+    background:rgba(250,248,245,.9);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+    border-radius:14px;box-shadow:0 6px 24px rgba(37,22,48,.12);transition:opacity .6s ease,transform .6s ease}
+  .top{top:12px;padding:8px 12px}
+  .top h1{display:none}
+  .bar{border-bottom:0;padding-bottom:0}
+  .dock{bottom:12px;padding:0;overflow:hidden;width:min(1120px,calc(100% - 24px))}
+  .dock #panel{margin:0;padding:8px 14px;border-top:0;min-height:0}
+  .dock #source{margin:6px 14px 0}
+  .dock footer{border-top:1px solid var(--line);background:transparent;padding:8px 14px}
+  .chip i{width:22px;height:22px}
+  body.calm .top{opacity:0;pointer-events:none;transform:translate(-50%,-16px)}
+  body.calm .dock{opacity:0;pointer-events:none;transform:translate(-50%,16px)}
+  body.calm{cursor:none}
+  .dock .note{display:none}
+  .dock #source,.dock #panel{display:none!important}
+  .dock footer{border-top:0!important}
+  .dock footer{gap:6px}
+  .dock footer button{padding:4px 10px;font-size:.86rem}
+  .dock #seek{min-width:100px}
+  /* welcome screen (landing direction J): the painting is the page, with the title and Play on top */
+  .welcome{position:fixed;inset:0;z-index:6;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;
+    background:radial-gradient(ellipse at center,rgba(250,248,245,.93) 0%,rgba(250,248,245,.6) 36%,rgba(250,248,245,0) 70%);transition:opacity .7s ease}
+  .welcome h1{font:normal clamp(4rem,9vw,7rem)/.98 "Instrument Serif",Georgia,serif;letter-spacing:-.02em;margin:0;color:#1d1424}
+  .welcome p{margin:22px 0 0;font-size:1.15rem;color:rgba(29,20,36,.68)}
+  .welcome .go{margin-top:30px;display:inline-flex;align-items:center;gap:10px;background:#2b1e32;color:#fff;border:0;border-radius:99px;padding:13px 26px;font:500 1rem/1 "Instrument Sans",system-ui,sans-serif;cursor:pointer;box-shadow:0 6px 20px rgba(43,30,50,.25)}
+  .welcome .go:hover{background:#3d2a47}
+  .welcome .wtrig{margin-top:22px;display:flex;gap:6px 18px;flex-wrap:wrap;justify-content:center}
+  .welcome .wtrig button{border:0;background:none;padding:2px 0;font:inherit;font-size:.95rem;color:rgba(29,20,36,.55);cursor:pointer}
+  .welcome .wtrig button[aria-pressed=true]{color:#1d1424;font-weight:600;text-decoration:underline;text-underline-offset:5px}
+  .welcome .wstyle{margin-top:12px;align-items:baseline}
+  .welcome .wstyle span{font-size:.8rem;letter-spacing:.08em;text-transform:uppercase;color:rgba(29,20,36,.45)}
+  .welcome .wstyle button{font-size:.9rem}
+  .welcome .wstyle button[data-suggested]::after{content:" · suggested";font-weight:400;font-size:.78rem;color:rgba(29,20,36,.5);text-decoration:none;display:inline-block}
+  .welcome .wfoot{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:16px 20px;font-size:.85rem;color:rgba(29,20,36,.78)}
+  .welcome .wfoot>span{background:rgba(255,253,250,.82);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border-radius:99px;padding:6px 12px;box-shadow:0 2px 10px rgba(29,20,36,.06)}
+  .welcome .wfoot button{border:0;background:none;font:inherit;color:inherit;text-decoration:underline;text-underline-offset:3px;cursor:pointer;padding:0}
+  .welcome .wsub{display:block;margin-top:10px;font-size:.8rem;color:rgba(29,20,36,.45)}
+  body.welcoming .top,body.welcoming .dock{display:none}
+  body:not(.welcoming) .welcome{opacity:0;pointer-events:none}
+  /* ---------- controls, second pass ---------- */
+  .top,.dock{background:rgba(255,255,255,.84);border:1px solid rgba(43,30,50,.08);box-shadow:0 10px 30px rgba(20,12,28,.14);-webkit-backdrop-filter:blur(14px) saturate(1.2);backdrop-filter:blur(14px) saturate(1.2)}
+  /* the top bar is anchored to the left edge, and Style comes first, so nothing in it ever moves */
+  .top{left:16px;top:16px;transform:none;padding:6px;border-radius:14px}
+  body.calm .top{transform:translateY(-16px)}
+  .bar{gap:6px;flex-wrap:nowrap}
+  .stylepick{display:flex;align-items:center;gap:8px;padding:0 4px 0 10px;border-right:1px solid var(--line);margin-right:2px}
+  .stylepick span{font-size:.72rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#7a7180}
+  .stylepick select{width:8.5em;border:0;background:#f3eff6;border-radius:9px;padding:7px 10px;font-weight:600}
+  #triggers{border:0;background:transparent;gap:2px;border-radius:10px}
+  #triggers label{border:0;border-radius:9px;padding:7px 13px;color:#4d4352;white-space:nowrap}
+  #triggers label:hover{background:#f3eff6}
+  #triggers label:has(:checked){background:#2b1e32;color:#fff;font-weight:500}
+  .soon{display:inline-block;margin-left:4px;padding:1px 6px;border-radius:99px;font-size:.62rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;vertical-align:1px;background:#ffe9b8;color:#6a4300}
+  #triggers label:has(:checked) .soon{background:rgba(255,233,184,.25);color:#ffe9b8}
+  .welcome .wtrig .soon{font-size:.58rem;text-decoration:none}
+  .color-key{display:flex;align-items:center;justify-content:center;gap:7px;min-height:26px;padding:4px 9px 5px;
+    border-top:1px solid rgba(43,30,50,.12);color:#392e3e;font-size:.78rem;line-height:1.2;white-space:nowrap}
+  .color-key i{display:inline-block;width:9px;height:9px;border-radius:50%;flex:none}
+  .color-key .spectrum{display:inline-block;width:clamp(48px,14vw,110px);height:6px;border-radius:9px;flex:none}
+  .color-key .sample{display:inline-flex;align-items:center;gap:4px}
+  @media(max-width:400px){.color-key{font-size:.72rem;gap:5px}}
+  /* bottom bar: what is playing on one line, how it is drawn on the line above */
+  .dock{width:min(980px,calc(100% - 32px));border-radius:16px;bottom:16px;overflow:visible}
+  .dock #source{margin:10px 16px 0;font-size:.8rem}
+  .dock #panel{padding:10px 16px 6px;gap:14px}
+  #lead{font-size:.95rem;min-width:0;max-width:24em}
+  #lead small{font-size:.76rem}
+  #legend{border-left:0;padding-left:0;gap:4px 12px;min-height:0}
+  .chip{font-size:.74rem}.chip i{width:18px;height:18px}
+  .dock footer{border-top:1px solid rgba(43,30,50,.08);padding:8px 10px 8px 12px;gap:8px;flex-wrap:nowrap}
+  .dock footer button{border-color:rgba(43,30,50,.14);padding:6px 12px;font-size:.84rem;white-space:nowrap}
+  #play{min-width:6.5em;padding:7px 16px!important;font-weight:600}
+  #track{max-width:14ch;font-size:.84rem;color:#4d4352}
+  #seek{min-width:80px}
+  #clock{font-size:.8rem;color:#6b625a;min-width:9ch}
+  .accent{background:#7832a1!important;color:#fff;border-color:#7832a1!important}
+  .more{position:relative;margin-left:auto}
+  .menu{position:absolute;right:0;bottom:calc(100% + 10px);min-width:220px;display:flex;flex-direction:column;padding:6px;background:#fff;border-radius:12px;border:1px solid rgba(43,30,50,.1);box-shadow:0 12px 32px rgba(20,12,28,.18)}
+  .menu button{border:0!important;text-align:left;border-radius:8px!important;padding:9px 12px!important;display:flex;justify-content:space-between;align-items:center}
+  .menu kbd{font:600 .7rem/1 "Instrument Sans",system-ui,sans-serif;color:#7a7180;border:1px solid #ddd5e2;border-radius:5px;padding:2px 5px}
+  @media (max-width:820px){
+    .top{left:8px;right:8px;top:8px;overflow-x:auto}
+    .dock{width:calc(100% - 16px);bottom:8px}
+    .dock footer{flex-wrap:wrap}
+    #legend{display:none}
+  }
+  @media (prefers-reduced-motion:reduce){.top,.dock,.welcome{transition:none}}
+</style>
+<section class="welcome" id="welcome" aria-label="Welcome">
+  <h1>The Sound<br>of <em>Color</em></h1>
+  <p>Press play. The song paints the screen.</p>
+  <button type="button" class="go" id="wplay"><svg width="12" height="12" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 1.5v11l9-5.5z" fill="currentColor"/></svg><span id="wplaylabel">Play the demo</span></button>
+  <div class="wtrig" id="wtrig" role="group" aria-label="What drives the colour">
+    <button type="button" data-t="notes">Notes</button><button type="button" data-t="pitch">Pitch</button><button type="button" data-t="instruments">Instruments <span class="soon">in progress</span></button><button type="button" data-t="harmony">Harmony</button><button type="button" data-t="whole">Whole Song</button>
+  </div>
+  <div class="wtrig wstyle" id="wstyle" role="group" aria-label="Painting style">
+    <span>Style</span>
+    <button type="button" data-s="wc">Watercolor</button><button type="button" data-s="ink">Ink</button><button type="button" data-s="sh">Shapes</button><button type="button" data-s="glass">Diamond</button>
+  </div>
+  <span class="wsub" id="wsub">Sound starts only when you press Play.</span>
+  <div class="wfoot"><span><button type="button" id="wchoose">Choose a song</button> from your computer</span><span>Controls fade away while the music plays</span></div>
+</section>
+<script>document.body.classList.add('welcoming')</script>
+<div class="top">
+  <h1>The Sound of Color</h1>
+  <div class="bar">
+    <label class="stylepick" for="styleSel"><span>Style</span><select id="styleSel" aria-label="Visual style"><option value="wc">Watercolor</option><option value="ink">Ink</option><option value="sh" selected>Shapes</option><option value="glass">Diamond</option></select></label>
+    <fieldset id="triggers">
+      <legend class="sr-only">What drives the artwork</legend>
+      <label><input type="radio" name="trigger" value="notes" checked>Notes</label>
+      <label><input type="radio" name="trigger" value="pitch">Pitch</label>
+      <label><input type="radio" name="trigger" value="instruments">Instruments <span class="soon" title="Instrument detection is still being worked on. The demo shows known parts; your own songs show note colours.">in progress</span></label>
+      <label><input type="radio" name="trigger" value="harmony">Harmony</label>
+      <label><input type="radio" name="trigger" value="whole">Whole Song</label>
+    </fieldset>
+  </div>
+</div>
+<main id="main">
+  <canvas id="cv" role="img" aria-label="Painting made from the music"></canvas>
+</main>
+<div class="dock" id="dock">
+<p id="source" hidden></p>
+<section id="panel" aria-live="polite">
+  <div id="lead"><span id="description"></span><small id="subnote"></small></div>
+  <div id="legend"></div>
+</section>
+<footer aria-label="Playback">
+  <button type="button" id="play">Play demo</button>
+  <span id="track">18-second demo</span>
+  <input type="range" id="seek" min="0" max="1000" value="0" aria-label="Song position">
+  <span id="clock">0:00</span>
+  <button type="button" id="restart" hidden>Start over</button>
+  <button type="button" id="choose">Choose a song</button>
+  <button type="button" id="demo" hidden>Use demo</button>
+  <button type="button" id="mute" aria-pressed="false">Mute</button>
+  <button type="button" id="save" class="accent" hidden>Save painting</button>
+  <div class="more">
+    <button type="button" id="morebtn" aria-expanded="false" aria-controls="moremenu" aria-label="More options">More ▾</button>
+    <div class="menu" id="moremenu" hidden>
+      <button type="button" id="snapshot" title="Download a PNG of the artwork right now. The music keeps playing.">Save a snapshot</button>
+      <button type="button" id="hide" title="Tap the artwork or press any key to bring the controls back. Shortcut: H">Hide controls <kbd>H</kbd></button>
+      <button type="button" id="fs" title="Shortcut: F">Full screen <kbd>F</kbd></button>
+    </div>
+  </div>
+  <span class="note" id="foot">Local preview · demo audio</span>
+  <span class="sr-only" id="status" role="status"></span>
+  <input type="file" id="file" accept="audio/*,.mp3,.wav,.m4a,.ogg,.flac" hidden>
+  <audio id="audio" preload="metadata"></audio>
+</footer>
+<div class="color-key" id="colorKey" aria-label="Color key"></div>
+</div>
+<script>
+(() => {
+const $=id=>document.getElementById(id);
+const cv=$('cv'), g=cv.getContext('2d'), audio=$('audio');
+let W=0,H=0,DPR=1;
+const NOTE=['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
+const clamp=(x,a=0,b=1)=>Math.max(a,Math.min(b,x));
+const sstep=(a,b,x)=>{x=clamp((x-a)/(b-a));return x*x*(3-2*x)};
+const rnd=(a=1,b)=>b===undefined?Math.random()*a:a+Math.random()*(b-a);
+
+/* ---------- color: pitch class -> hue, walking the circle of fifths so related notes sit side by side ---------- */
+const hueOf=pc=>((pc*7)%12)*30;
+/* v = vividness 0..1. Low v gives a greyed, dull pigment; high v gives full neon. */
+function vivid(n,F){return clamp(n.s*.55+F.bright*.35+F.energy*.25+(n.midi>72?.1:0)-(n.midi<50?.28:0))}
+const yOf=m=>H*(.93-.86*clamp((m-36)/60));
+
+/* ---------- canvas ---------- */
+const INK_CPU={
+  surface:document.createElement('canvas'),drops:[],time:0,lastDrop:0,quiet:0,
+  init(){
+    const cell=Math.max(3,Math.sqrt(W*H/29000));
+    this.cols=Math.max(8,Math.round(W/cell));
+    this.rows=Math.max(8,Math.round(H/cell));
+    const {cols,rows}=this;
+    this.surface.width=cols;this.surface.height=rows;
+    this.ctx=this.surface.getContext('2d');
+    this.pixels=this.ctx.createImageData(cols,rows);
+    const field=()=>new Float32Array(cols*rows);
+    this.u=field();this.v=field();this.uNext=field();this.vNext=field();
+    this.pressure=field();this.divergence=field();this.curl=field();
+    this.dye=[field(),field(),field()];this.dyeNext=[field(),field(),field()];
+    this.reverse=field();
+    this.drops=[];this.time=0;this.lastDrop=-2;this.quiet=0;this.wet=false;
+    this.draw();
+  },
+  release(x,y,hue,strength=1,delay=0){
+    this.drops.push({x:clamp(x,.01,.99)*this.cols,y:clamp(y,.015,.94)*this.rows,
+      hue,strength,age:-delay,fall:.48,side:x<.5?1:-1});
+    this.lastDrop=this.time;
+    this.quiet=0;this.wet=true;
+  },
+  frame(F){
+    if(!F||F.energy<.035||this.time-this.lastDrop<(F.onset?.28:.48))return;
+    const notes=F.notes.filter(n=>n.s>.22).slice(0,4);
+    for(const [i,note] of notes.entries()){
+      const [x,y]=note.part?inkPartOrigin(note.part):[
+        LAYOUT.x==null?rnd(.03,.97):clamp(LAYOUT.x+rnd(-LAYOUT.xs,LAYOUT.xs),.03,.97),
+        clamp(yOf(note.midi)/H,.08,.85)
+      ];
+      this.release(x,y,hueOf(note.pc),.93+note.s*.85+F.energy*.52,i*.06);
+    }
+  },
+  deposit(drop,dt){
+    const {cols,rows,u,v,dye}=this;
+    const age=drop.age-drop.fall;
+    const progress=clamp(age/.76);
+    const fade=Math.sin(Math.PI*(.17+.83*progress));
+    const scale=Math.min(cols,rows);
+    const r=Math.max(2.8,scale*(.047+.039*progress)*drop.strength);
+    const x=drop.x+drop.side*(progress*r*.91+Math.sin(progress*8.1)*r*.24);
+    const y=drop.y+progress*scale*.14;
+    const h=drop.hue/60;
+    const k=n=>(n+h)%6;
+    const rgb=[5,3,1].map(n=>.96-.84*Math.max(0,Math.min(k(n),4-k(n),1)));
+    for(let j=Math.max(1,Math.floor(y-r*2));j<Math.min(rows-1,y+r*2);j++){
+      for(let i=Math.max(1,Math.floor(x-r*2));i<Math.min(cols-1,x+r*2);i++){
+        const dx=(i-x)/r,dy=(j-y)/r,d=dx*dx+dy*dy;
+        if(d>4)continue;
+        const p=i+j*cols,weight=Math.exp(-2.3*d)*fade;
+        const amount=weight*dt*10*drop.strength;
+        for(let c=0;c<3;c++)dye[c][p]=Math.min(4,dye[c][p]+amount*(1-rgb[c]));
+        const ring=Math.exp(-.89*d)*fade;
+        u[p]+=(drop.side*.19+dx*.41-dy*.45*drop.side)*ring*dt*21;
+        v[p]+=(.65+dx*.46*drop.side+dy*.17)*ring*dt*19;
+      }
+    }
+  },
+  advect(source,target,loss,direction=1){
+    const {cols,rows,u,v}=this;
+    for(let y=1;y<rows-1;y++)for(let x=1;x<cols-1;x++){
+      const p=x+y*cols;
+      const bx=clamp(x-u[p]*direction*.28,.5,cols-1.5),by=clamp(y-v[p]*direction*.28,.5,rows-1.5);
+      const ix=Math.floor(bx),iy=Math.floor(by),fx=bx-ix,fy=by-iy,b=ix+iy*cols;
+      const a=source[b]+(source[b+1]-source[b])*fx;
+      const c=source[b+cols]+(source[b+cols+1]-source[b+cols])*fx;
+      target[p]=(a+(c-a)*fy)*loss;
+    }
+  },
+  movePigment(source,target){
+    const {cols,rows,u,v,reverse}=this;
+    this.advect(source,target,1);
+    this.advect(target,reverse,1,-1);
+    // Recover detail lost during interpolation without adding new color peaks.
+    for(let y=1;y<rows-1;y++)for(let x=1;x<cols-1;x++){
+      const p=x+y*cols;
+      const bx=Math.floor(clamp(x-u[p]*.28,.5,cols-1.5));
+      const by=Math.floor(clamp(y-v[p]*.28,.5,rows-1.5));
+      const i=bx+by*cols;
+      const a=source[i],b=source[i+1],c=source[i+cols],d=source[i+cols+1];
+      target[p]=clamp(target[p]+.5*(source[p]-reverse[p]),
+        Math.min(a,b,c,d),Math.max(a,b,c,d))*this.pigmentKeep;
+    }
+  },
+  moveWater(){
+    const {cols,rows,u,v,pressure,divergence,curl,dye}=this;
+    for(let y=1;y<rows-1;y++)for(let x=1;x<cols-1;x++){
+      const i=x+y*cols;
+      curl[i]=.5*(v[i+1]-v[i-1]-u[i+cols]+u[i-cols]);
+    }
+    for(let y=1;y<rows-1;y++)for(let x=1;x<cols-1;x++){
+      const i=x+y*cols;
+      const dx=Math.abs(curl[i+1])-Math.abs(curl[i-1]);
+      const dy=Math.abs(curl[i+cols])-Math.abs(curl[i-cols]);
+      const spin=curl[i]*.25/(Math.sqrt(dx*dx+dy*dy)+.001);
+      u[i]=clamp(u[i]+dy*spin,-3,3);
+      v[i]=clamp(v[i]-dx*spin+.017*Math.min(2,dye[0][i]+dye[1][i]+dye[2][i]),-3,3);
+    }
+    this.advect(u,this.uNext,.994);this.advect(v,this.vNext,.994);
+    [this.u,this.uNext]=[this.uNext,u];[this.v,this.vNext]=[this.vNext,v];
+
+    const nextU=this.u,nextV=this.v;
+    pressure.fill(0);
+    for(let y=1;y<rows-1;y++)for(let x=1;x<cols-1;x++){
+      const i=x+y*cols;
+      divergence[i]=.5*(nextU[i+1]-nextU[i-1]+nextV[i+cols]-nextV[i-cols]);
+    }
+    for(let pass=0;pass<9;pass++){
+      for(let y=1;y<rows-1;y++)for(let x=1;x<cols-1;x++){
+        const i=x+y*cols;
+        pressure[i]=(pressure[i-1]+pressure[i+1]+pressure[i-cols]+pressure[i+cols]-divergence[i])*.25;
+      }
+    }
+    for(let y=1;y<rows-1;y++)for(let x=1;x<cols-1;x++){
+      const i=x+y*cols;
+      nextU[i]-=.5*(pressure[i+1]-pressure[i-1]);
+      nextV[i]-=.5*(pressure[i+cols]-pressure[i-cols]);
+    }
+  },
+  step(dt){
+    this.time+=dt;
+    if(!this.wet)return;
+    this.quiet+=dt;
+    for(const drop of this.drops){
+      drop.age+=dt;
+      if(drop.age>=drop.fall)this.deposit(drop,dt);
+    }
+    this.drops=this.drops.filter(drop=>drop.age<drop.fall+.76);
+    this.moveWater();
+    for(let c=0;c<3;c++)this.movePigment(this.dye[c],this.dyeNext[c]);
+    [this.dye,this.dyeNext]=[this.dyeNext,this.dye];
+    if(this.quiet>75){this.wet=false;return}
+    this.draw();
+  },
+  draw(){
+    const {cols,rows,dye,pixels}=this;
+    g.globalCompositeOperation='source-over';
+    g.fillStyle='#fff';g.fillRect(0,0,W,H);
+    if(this.lastDrop<0)return;
+    const data=pixels.data;
+    const [red,green,blue]=dye;
+    for(let i=0;i<red.length;i++){
+      const p=i*4;
+      const density=red[i]+green[i]+blue[i];
+      if(density<.002){
+        data[p]=data[p+1]=data[p+2]=data[p+3]=255;
+        continue;
+      }
+      const up=i>=cols?i-cols:i,left=i%cols?i-1:i;
+      const relief=clamp((density-red[up]-green[up]-blue[up])*.59+
+        (density-red[left]-green[left]-blue[left])*.34,-.21,.18);
+      const light=1+relief*.9;
+      const spread=1.25+Math.min(1,density)*.23;
+      const shade=1-Math.min(.14,density*.05);
+      const transmission=d=>255*Math.exp(-d*spread)*light*shade;
+      data[p]=transmission(red[i]);data[p+1]=transmission(green[i]);data[p+2]=transmission(blue[i]);data[p+3]=255;
+    }
+    this.ctx.putImageData(pixels,0,0);
+    g.imageSmoothingQuality='medium';
+    g.drawImage(this.surface,0,0,W,H);
+    for(const drop of this.drops){
+      if(drop.age<0||drop.age>drop.fall+.22)continue;
+      const x=drop.x/cols*W,y=drop.y/rows*H;
+      const q=clamp(drop.age/drop.fall);
+      if(q<1){
+        const fall=46*(1-q*q),r=3+drop.strength*2.6;
+        g.fillStyle='hsl('+drop.hue+' 86% 46%)';
+        g.beginPath();g.ellipse(x,y-fall,r,r*(1.08+q*.27),0,0,Math.PI*2);g.fill();
+      }else{
+        const spread=clamp((drop.age-drop.fall)/.22);
+        g.strokeStyle='hsl('+drop.hue+' 80% 58% / '+((1-spread)*.47)+')';
+        g.lineWidth=1;
+        g.beginPath();g.ellipse(x,y,5+spread*27,1+spread*5,0,0,Math.PI*2);g.stroke();
+      }
+    }
+  },
+  resize(){
+    if(!this.dye||this.lastDrop<0){this.init();return}
+    const {cols,rows,dye,u,v,drops,time,lastDrop,quiet,wet}=this;
+    this.init();
+    const sx=this.cols/cols,sy=this.rows/rows;
+    for(let y=1;y<this.rows-1;y++)for(let x=1;x<this.cols-1;x++){
+      const to=x+y*this.cols,from=Math.floor(x/sx)+Math.floor(y/sy)*cols;
+      this.u[to]=u[from]*sx;this.v[to]=v[from]*sy;
+      for(let c=0;c<3;c++)this.dye[c][to]=dye[c][from];
+    }
+    for(const drop of drops){drop.x*=sx;drop.y*=sy}
+    Object.assign(this,{drops,time,lastDrop,quiet,wet});
+    this.draw();
+  }
+};
+
+/* Ink in water, Fable experiment. The same idea as the baseline (water motion carries pigment), but run on the
+   graphics card: pigment is tracked at roughly 25 times the baseline's detail, each cloud is poured slowly in
+   uneven pulses so it folds into sheets, and the result is lit as soft, opaque paint clouds on white water.
+   Add ?ink=cpu to the address to force the baseline for comparison. */
+const INK_GL={
+  fps:60,drops:[],swell:[],time:0,lastDrop:-2,quiet:0,wet:false,lost:false,seed:7,key:'',gl:null,P:null,
+  canvas:document.createElement('canvas'),
+  /* tuning: ink poured per frame, push given to fresh ink, how long water keeps moving, how long the push
+     travels with the ink, pigment fade, swirl strength, then four shading controls */
+  look:{size:1.42,ink:.068,swell:1.8,puffT:1.6,puffGap:.54,thrust:.00085,drift:.00105,drag:.992,carry:.995,fade:.99996,erode:0,curl:.82,fine:.012,broad:.10,crease:1.12,dense:4.45,pale:.14},
+  recent:[],
+  names:['dye','dye2','tmpA','tmpB','vel','vel2','curl','div','pr','pr2','half','quarter','blurA','blurB'],
+  rand(){let t=this.seed+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296},
+  r(a,b){return a+this.rand()*(b-a)},
+  /* Match the twelve note colors shown in the legend. */
+  tint(h,vividness=.85){
+    const hue=((h%360)+360)%360/60;
+    const light=.49,saturation=.87+.13*clamp(vividness);
+    const amplitude=saturation*Math.min(light,1-light);
+    return [0,8,4].map(offset=>{
+      const k=(offset+hue*2)%12;
+      return light-amplitude*Math.max(-1,Math.min(k-3,9-k,1));
+    });
+  },
+  boot(){
+    try{
+      const gl=this.canvas.getContext('webgl2',{alpha:false,antialias:false,depth:false,stencil:false});
+      if(!gl||!(gl.getExtension('EXT_color_buffer_float')||gl.getExtension('EXT_color_buffer_half_float')))return false;
+      this.gl=gl;this.build();
+      const t=this.target(4,4),ok=gl.checkFramebufferStatus(gl.FRAMEBUFFER)===gl.FRAMEBUFFER_COMPLETE;
+      gl.deleteTexture(t.tex);gl.deleteFramebuffer(t.fbo);
+      if(!ok)return false;
+      this.canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();this.lost=true});
+      this.canvas.addEventListener('webglcontextrestored',()=>{this.lost=false;this.key='';for(const n of this.names)this[n]=null;this.build();this.init()});
+      return true;
+    }catch(e){console.warn('Graphics-card ink is unavailable, using the baseline.',e);return false}
+  },
+  build(){
+    const gl=this.gl;
+    const VS='#version 300 es\nout vec2 vUv;void main(){vec2 p=vec2(float((gl_VertexID<<1)&2),float(gl_VertexID&2));vUv=p;gl_Position=vec4(p*2.-1.,0.,1.);}';
+        const HEAD='#version 300 es\nprecision highp float;precision highp sampler2D;in vec2 vUv;out vec4 o;\n';
+    const NB='uniform vec2 uTexel;\n#define vL (vUv-vec2(uTexel.x,0.))\n#define vR (vUv+vec2(uTexel.x,0.))\n#define vT (vUv+vec2(0.,uTexel.y))\n#define vB (vUv-vec2(0.,uTexel.y))\n';
+    /* read the water's motion averaged over four neighboring cells; this removes a cell-sized zigzag the solver
+       can leave behind, which otherwise shows up as saw-toothed cloud edges */
+    const FLOW='uniform sampler2D uVel;uniform vec2 uScale,uHalf;vec2 flow(){return .25*(texture(uVel,vUv+uHalf).xy+texture(uVel,vUv-uHalf).xy+texture(uVel,vUv+vec2(uHalf.x,-uHalf.y)).xy+texture(uVel,vUv+vec2(-uHalf.x,uHalf.y)).xy);}\n';
+    const sh=(type,src)=>{const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);
+      if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(s));return s};
+    const vs=sh(gl.VERTEX_SHADER,VS);
+    const make=fs=>{const p=gl.createProgram();gl.attachShader(p,vs);gl.attachShader(p,sh(gl.FRAGMENT_SHADER,HEAD+fs));gl.linkProgram(p);
+      if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(p));return {p,u:{}}};
+    this.P={
+      /* carry a field along the water's motion */
+      advect:make(FLOW+'uniform sampler2D uSrc;uniform vec4 uKeep;void main(){o=texture(uSrc,vUv-flow()*uScale)*uKeep;}'),
+      /* pigment only: undo most of the blur that carrying introduces, without inventing new color peaks */
+      mac:make(FLOW+`uniform sampler2D uSrc,uFwd,uBack;uniform float uKeep,uErode;
+        void main(){
+          vec2 c=vUv-flow()*uScale,sz=vec2(textureSize(uSrc,0));
+          ivec2 i=ivec2(floor(c*sz-.5)),z=ivec2(0),m=ivec2(sz)-1;
+          vec4 a=texelFetch(uSrc,clamp(i,z,m),0),b=texelFetch(uSrc,clamp(i+ivec2(1,0),z,m),0),
+               e=texelFetch(uSrc,clamp(i+ivec2(0,1),z,m),0),f=texelFetch(uSrc,clamp(i+1,z,m),0);
+          vec4 v=texture(uFwd,vUv)+.5*(texture(uSrc,vUv)-texture(uBack,vUv));
+          o=clamp(v,min(min(a,b),min(e,f)),max(max(a,b),max(e,f)))*uKeep;
+          o*=min(1.,8./max(.001,o.a));
+          /* fading mode: thin veils melt away first, so a cloud dissolves from its edges inward */
+          o*=max(0.,o.a-uErode)/max(o.a,1e-5);
+        }`),
+      splat:make('uniform vec2 uPoint;uniform float uAspect,uRadius;uniform vec4 uValue;void main(){vec2 d=vUv-uPoint;d.x*=uAspect;o=uValue*exp(-dot(d,d)/(uRadius*uRadius));}'),
+      curl:make(NB+'uniform sampler2D uVel;void main(){o=vec4(.5*(texture(uVel,vR).y-texture(uVel,vL).y-texture(uVel,vT).x+texture(uVel,vB).x));}'),
+      /* strengthen small swirls, and let fresh ink push the water in the direction it was poured */
+      force:make(NB+`uniform sampler2D uVel,uCurl;uniform float uDt,uCurlPush,uTime,uDrift,uAspect;
+        void main(){
+          float l=abs(texture(uCurl,vL).x),r=abs(texture(uCurl,vR).x),t=abs(texture(uCurl,vT).x),b=abs(texture(uCurl,vB).x),c=texture(uCurl,vUv).x;
+          vec2 f=.5*vec2(t-b,r-l);f/=length(f)+1e-6;f*=uCurlPush*c;f.y=-f.y;
+          /* a very slow, ever-changing current keeps the clouds turning over after the pouring stops */
+          const float PI=3.14159265;vec2 q=vUv*PI;
+          float m1=cos(uTime*.05),m2=sin(uTime*.04),m3=.5*sin(uTime*.07+1.);
+          f+=uDrift*vec2(m1*sin(2.*q.x)*cos(q.y)+2.*m2*sin(q.x)*cos(2.*q.y)+2.*m3*sin(3.*q.x)*cos(2.*q.y),
+                         -(2.*m1*cos(2.*q.x)*sin(q.y)+m2*cos(q.x)*sin(2.*q.y)+3.*m3*cos(3.*q.x)*sin(2.*q.y))/uAspect)*PI;
+          vec4 v=texture(uVel,vUv);v.xy=clamp(v.xy+(f+v.zw)*uDt,-1.,1.);o=v;
+        }`),
+      /* the screen edges are walls, so ink stays in view */
+      div:make(NB+`uniform sampler2D uVel;
+        void main(){
+          vec2 c=texture(uVel,vUv).xy;
+          float l=texture(uVel,vL).x,r=texture(uVel,vR).x,t=texture(uVel,vT).y,b=texture(uVel,vB).y;
+          if(vL.x<0.)l=-c.x;if(vR.x>1.)r=-c.x;if(vT.y>1.)t=-c.y;if(vB.y<0.)b=-c.y;
+          o=vec4(.5*(r-l+t-b));
+        }`),
+      pres:make(NB+'uniform sampler2D uPres,uDiv;float pr(vec2 c){return texture(uPres,c).x;}void main(){o=vec4((pr(vL)+pr(vR)+pr(vT)+pr(vB)-texture(uDiv,vUv).x)*.25);}'),
+      grad:make(NB+'uniform sampler2D uVel,uPres;float pr(vec2 c){return texture(uPres,c).x;}void main(){vec4 v=texture(uVel,vUv);v.xy-=.5*vec2(pr(vR)-pr(vL),pr(vT)-pr(vB));o=v;}'),
+      copy:make('uniform sampler2D uSrc;void main(){o=texture(uSrc,vUv);}'),
+      blur:make('uniform sampler2D uSrc;uniform vec2 uStep;void main(){vec4 s=texture(uSrc,vUv);float w=1.;for(int i=1;i<5;i++){float k=exp(-float(i*i)/8.);vec2 d=uStep*float(i);s+=k*(texture(uSrc,vUv+d)+texture(uSrc,vUv-d));w+=2.*k;}o=s/w;}'),
+      /* turn pigment thickness into lit clouds: fine folds and broad billows tilt the surface toward or away from
+         a light at the upper left, creases darken, thin veils stay pale, and a blurred copy sits behind as depth */
+      show:make(`uniform sampler2D uDye,uBlur;uniform vec2 uPx,uBpx;uniform float uRes,uFine,uBroad,uCrease,uDense,uPale;
+        float hgt(float d){return .62*log(1.+2.2*d);}
+        float hash(vec2 p){return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453);}
+        void main(){
+          vec4 D=texture(uDye,vUv),B=texture(uBlur,vUv);
+          vec2 e=uPx*1.5,b=uBpx*2.;
+          vec2 gf=vec2(hgt(texture(uDye,vUv+vec2(e.x,0.)).a)-hgt(texture(uDye,vUv-vec2(e.x,0.)).a),
+                       hgt(texture(uDye,vUv+vec2(0.,e.y)).a)-hgt(texture(uDye,vUv-vec2(0.,e.y)).a))*uRes/3.;
+          vec2 gb=vec2(hgt(texture(uBlur,vUv+vec2(b.x,0.)).a)-hgt(texture(uBlur,vUv-vec2(b.x,0.)).a),
+                       hgt(texture(uBlur,vUv+vec2(0.,b.y)).a)-hgt(texture(uBlur,vUv-vec2(0.,b.y)).a))*uRes/32.;
+          vec3 n=normalize(vec3(-(gf*uFine+gb*uBroad),1.)),L=normalize(vec3(-.5,.62,.6));
+          float crease=clamp((B.a-D.a)*uCrease,-.6,.6);
+          float shade=clamp(smoothstep(-.25,.95,dot(n,L))-crease*.45,0.,1.);
+          vec3 alb=clamp(D.rgb/max(D.a,1e-4),0.,1.);
+          vec3 body=mix(alb*mix(vec3(1.),alb,.75)*.86,mix(alb,vec3(1.),uPale),shade);
+          body+=pow(max(dot(n,normalize(L+vec3(0.,0.,1.))),0.),30.)*.1;
+          vec3 back=mix(clamp(B.rgb/max(B.a,1e-4),0.,1.),vec3(1.),.2);
+          vec3 col=mix(vec3(1.),back,(1.-exp(-2.*B.a))*.7);
+          col=mix(col,body,1.-exp(-uDense*D.a));
+          o=vec4(col+(hash(gl_FragCoord.xy)-.5)/255.,1.);
+        }`)
+    };
+  },
+  target(w,h){
+    const gl=this.gl,tex=gl.createTexture(),fbo=gl.createFramebuffer();
+    gl.bindTexture(gl.TEXTURE_2D,tex);
+    for(const [k,v] of [[gl.TEXTURE_MIN_FILTER,gl.LINEAR],[gl.TEXTURE_MAG_FILTER,gl.LINEAR],[gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE],[gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE]])gl.texParameteri(gl.TEXTURE_2D,k,v);
+    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA16F,w,h,0,gl.RGBA,gl.HALF_FLOAT,null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER,fbo);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,tex,0);
+    gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);
+    return {tex,fbo,w,h};
+  },
+  run(p,to,u){
+    const gl=this.gl;gl.useProgram(p.p);let unit=0;
+    for(const k in u){
+      if(!(k in p.u))p.u[k]=gl.getUniformLocation(p.p,k);
+      const l=p.u[k],v=u[k];if(l===null)continue;
+      if(v.tex){gl.activeTexture(gl.TEXTURE0+unit);gl.bindTexture(gl.TEXTURE_2D,v.tex);gl.uniform1i(l,unit++)}
+      else if(v.length===2)gl.uniform2f(l,v[0],v[1]);
+      else if(v.length===4)gl.uniform4f(l,v[0],v[1],v[2],v[3]);
+      else gl.uniform1f(l,v);
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER,to?to.fbo:null);
+    gl.viewport(0,0,to?to.w:this.canvas.width,to?to.h:this.canvas.height);
+    gl.drawArrays(gl.TRIANGLES,0,3);
+  },
+  flip(n){const m=n+'2';[this[n],this[m]]=[this[m],this[n]]},
+  /* add a soft round dab of something (pigment or push) at one place; r is a fraction of the screen height */
+  splat(to,x,y,r,value){
+    const gl=this.gl,rx=r*3/this.aspect,ry=r*3;
+    gl.enable(gl.BLEND);gl.blendFunc(gl.ONE,gl.ONE);gl.enable(gl.SCISSOR_TEST);
+    gl.scissor(Math.floor((x-rx)*to.w),Math.floor((y-ry)*to.h),Math.ceil(2*rx*to.w)+1,Math.ceil(2*ry*to.h)+1);
+    this.run(this.P.splat,to,{uPoint:[x,y],uAspect:this.aspect,uRadius:r,uValue:value});
+    gl.disable(gl.BLEND);gl.disable(gl.SCISSOR_TEST);
+  },
+  init(){
+    const gl=this.gl;this.aspect=W/H||1;
+    this.drops=[];this.recent=[];this.time=0;this.lastDrop=-2;this.quiet=0;this.wet=false;
+    /* a hidden or zero-size window has nothing to draw on; wait for the next resize */
+    if(this.lost||!W||!H){this.draw();return}
+    const k=Math.min(1,1920/Math.max(cv.width,cv.height)),cw=Math.round(cv.width*k),ch=Math.round(cv.height*k);
+    const ds=Math.min(1,1280/Math.max(cw,ch)),dw=Math.round(cw*ds),dh=Math.round(ch*ds);
+    const ss=320/Math.max(W,H),sw=Math.max(32,Math.round(W*ss)),shh=Math.max(32,Math.round(H*ss));
+    const key=[cw,ch,dw,dh,sw,shh].join();
+    if(key!==this.key){
+      this.key=key;this.canvas.width=cw;this.canvas.height=ch;
+      for(const n of this.names){const t=this[n];if(t){gl.deleteTexture(t.tex);gl.deleteFramebuffer(t.fbo)}}
+      const size={dye:[dw,dh],dye2:[dw,dh],tmpA:[dw,dh],tmpB:[dw,dh],half:[dw>>1,dh>>1],quarter:[dw>>2,dh>>2],blurA:[dw>>3,dh>>3],blurB:[dw>>3,dh>>3]};
+      for(const n of this.names){const s=size[n]||[sw,shh];this[n]=this.target(Math.max(2,s[0]),Math.max(2,s[1]))}
+    }else for(const n of this.names){gl.bindFramebuffer(gl.FRAMEBUFFER,this[n].fbo);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT)}
+    this.draw();
+  },
+  /* one cloud: x and y are 0..1 from the top left, angle is the pour direction in radians away from straight down */
+  release(x,y,hue,strength=1,delay=0,angle,vividness=.85){
+    if(angle===undefined)angle=this.r(-2.3,2.3);
+    /* a cloud is a short series of puffs. Each puff starts a little further out along a spiral and inflates on
+       its own, pressing against the ones before it, so the cloud grows as a cluster of rounded folds */
+    const K=this.look,rd=(.026+.017*strength)*K.size,n=Math.round(3+2*strength),ph=this.r(0,6.283),turn=this.rand()<.5?2.4:-2.4,puffs=[];
+    for(let i=0;i<n;i++){
+      const a=ph+i*turn,m=i?rd*.46*Math.sqrt(i)*this.r(.8,1.15):0;
+      puffs.push({t:i*K.puffGap*this.r(.85,1.15),ox:Math.cos(a)*m,oy:Math.sin(a)*m,shade:this.r(.8,1.12),big:this.r(.75,1.25)});
+    }
+    this.drops.push({x:clamp(x,.02,.98),y:1-clamp(y,.02,.98),hue,vividness,strength,age:-delay,life:puffs[n-1].t+K.puffT,
+      dx:Math.sin(angle),dy:-Math.cos(angle),ph,rd,puffs});
+    if(this.drops.length>28)this.drops.shift();
+    this.lastDrop=this.time;this.quiet=0;this.wet=true;
+  },
+  /* "Drop ink": a handful of new clouds spread across the width */
+  frame(F){
+    if(!F||F.energy<.035)return;
+    const live=this.drops.length,gap=(F.onset?.35:.85)*(1+live/12);
+    if(live>=18||this.time-this.lastDrop<gap)return;
+    const notes=F.notes.filter(n=>n.s>.22).slice(0,Math.min(4,18-live));
+    if(!notes.length)return;
+    for(const [i,note] of notes.entries()){
+      const [x,y]=note.part?inkPartOrigin(note.part):this.place(yOf(note.midi)/H);
+      const strength=.86+note.s*.8+F.energy*.55;
+      const direction=Math.atan2(.5-x,y-.5)+this.r(-.85,.85);
+      this.release(x,y,hueOf(note.pc),strength,i*.06,direction,note.v);
+    }
+  },
+  place(hint){
+    let best=[.5,.5],score=-1;
+    for(let k=0;k<6;k++){
+      const x=LAYOUT.x==null?this.r(.07,.93):clamp(LAYOUT.x+this.r(-LAYOUT.xs,LAYOUT.xs),.05,.95),y=clamp(hint+this.r(-.32,.32)*LAYOUT.band,.1,.86);let near=9;
+      for(const p of this.recent){const dx=(x-p[0])*this.aspect,dy=y-p[1];near=Math.min(near,dx*dx+dy*dy)}
+      if(near>score){score=near;best=[x,y]}
+    }
+    this.recent.push(best);if(this.recent.length>12)this.recent.shift();
+    return best;
+  },
+  /* pour one cloud for one frame: a gentle push, plus each active puff adding pigment and volume at its own spot */
+  emit(d){
+    const K=this.look,A=this.aspect,q=d.age/d.life,rd=d.rd,go=.18*d.strength*q;
+    const bend=.07*Math.sin(q*Math.PI*1.3+d.ph)*Math.sin(q*Math.PI);
+    const cx=d.x+(d.dx*go-d.dy*bend)/A,cy=d.y+d.dy*go+d.dx*bend;
+    const env=sstep(0,.1,q)*(1-sstep(.7,1,q)),t=this.tint(d.hue,d.vividness);
+    this.splat(this.vel,cx,cy,rd*1.6,[0,0,d.dx*K.thrust*env,d.dy*K.thrust*env]);
+    for(const p of d.puffs){
+      const u=(d.age-p.t)/K.puffT;if(u<0||u>=1)continue;
+      const e=sstep(0,.15,u)*(1-sstep(.7,1,u)),x=cx+p.ox/A+this.r(-.04,.04)*rd/A,y=cy+p.oy+this.r(-.04,.04)*rd;
+      /* pigment gets thicker as the puff inflates, so each fold ends up domed: thin at its rim, rich at its heart */
+      const amt=K.ink*e*(.4+.9*u)*this.r(.7,1.3),w=p.shade;
+      this.splat(this.dye,x,y,rd*(.24+.12*u),[t[0]*w*amt,t[1]*w*amt,t[2]*w*amt,amt]);
+      // Thin strands feed into the wider plume as it curls.
+      if(u<.66){
+        const side=.32*rd*Math.sin(p.t+d.ph);
+        const strand=amt*.24;
+        const sx=x-d.dy*side/A,sy=y+d.dx*side;
+        this.splat(this.dye,sx,sy,rd*.12,[t[0]*strand,t[1]*strand,t[2]*strand,strand]);
+        this.splat(this.vel,sx,sy,rd*.52,[0,0,-d.dy*side*.027*e,d.dx*side*.027*e]);
+      }
+      this.swell.push([x,y,rd*.36,-K.swell*e*p.big/this.vel.h]);
+    }
+  },
+  step(){
+    const dt=1/60;this.time+=dt;
+    if(!this.wet||this.lost||!this.dye)return;
+    this.quiet+=dt;
+    const P=this.P,K=this.look,sc=[dt/this.aspect,dt],one=[1,1,1,1];
+    this.swell=[];
+    for(const d of this.drops){d.age+=dt;if(d.age>=0){this.emit(d);this.quiet=0}}
+    this.drops=this.drops.filter(d=>d.age<d.life);
+    const tx=[1/this.vel.w,1/this.vel.h],hf=[.5*tx[0],.5*tx[1]];
+    this.run(P.curl,this.curl,{uVel:this.vel,uTexel:tx});
+    this.run(P.force,this.vel2,{uVel:this.vel,uCurl:this.curl,uTexel:tx,uDt:dt,uCurlPush:K.curl,uTime:this.time,uDrift:K.drift,uAspect:this.aspect});this.flip('vel');
+    /* keep the water incompressible, which is what makes it roll and curl instead of piling up */
+    this.run(P.div,this.div,{uVel:this.vel,uTexel:tx});
+    /* swelling clouds need room: the same amount of clear water is drawn off evenly across the whole screen */
+    let room=0;
+    for(const w of this.swell){this.splat(this.div,w[0],w[1],w[2],[w[3],0,0,0]);room-=w[3]*Math.PI*w[2]*w[2]/this.aspect}
+    if(room)this.splat(this.div,.5,.5,1e3,[room,0,0,0]);
+    for(let i=0;i<18;i++){this.run(P.pres,this.pr2,{uPres:this.pr,uDiv:this.div,uTexel:tx});this.flip('pr')}
+    this.run(P.grad,this.vel2,{uVel:this.vel,uPres:this.pr,uTexel:tx});this.flip('vel');
+    this.run(P.advect,this.vel2,{uVel:this.vel,uSrc:this.vel,uScale:sc,uHalf:hf,uKeep:[K.drag,K.drag,K.carry,K.carry]});this.flip('vel');
+    this.run(P.advect,this.tmpA,{uVel:this.vel,uSrc:this.dye,uScale:sc,uHalf:hf,uKeep:one});
+    this.run(P.advect,this.tmpB,{uVel:this.vel,uSrc:this.tmpA,uScale:[-sc[0],-sc[1]],uHalf:hf,uKeep:one});
+    this.run(P.mac,this.dye2,{uVel:this.vel,uSrc:this.dye,uFwd:this.tmpA,uBack:this.tmpB,uScale:sc,uHalf:hf,uKeep:K.fade,uErode:K.erode});this.flip('dye');
+    if(this.quiet>90){this.wet=false;return}
+    this.draw();
+  },
+  draw(){
+    g.globalCompositeOperation='source-over';
+    if(this.lastDrop<0||this.lost||!this.dye||!this.canvas.width||!this.canvas.height){g.fillStyle='#fff';g.fillRect(0,0,W,H);return}
+    const P=this.P,K=this.look,d=this.dye,b=this.blurB;
+    this.run(P.copy,this.half,{uSrc:d});
+    this.run(P.copy,this.quarter,{uSrc:this.half});
+    this.run(P.blur,this.blurA,{uSrc:this.quarter,uStep:[1/this.blurA.w,0]});
+    this.run(P.blur,b,{uSrc:this.blurA,uStep:[0,1/b.h]});
+    this.run(P.show,null,{uDye:d,uBlur:b,uPx:[1/d.w,1/d.h],uBpx:[1/b.w,1/b.h],uRes:d.h,uFine:K.fine,uBroad:K.broad,uCrease:K.crease,uDense:K.dense,uPale:K.pale});
+    g.imageSmoothingQuality='medium';
+    g.drawImage(this.canvas,0,0,W,H);
+  },
+  /* keep the picture when the window changes shape */
+  resize(){
+    if(this.lastDrop<0||this.lost||!this.dye){this.init();return}
+    const old=[this.dye,this.vel],keep={drops:this.drops,time:this.time,lastDrop:this.lastDrop,quiet:this.quiet,wet:this.wet};
+    this.dye=this.vel=null;this.key='';this.init();
+    this.run(this.P.copy,this.dye,{uSrc:old[0]});this.run(this.P.copy,this.vel,{uSrc:old[1]});
+    for(const t of old){this.gl.deleteTexture(t.tex);this.gl.deleteFramebuffer(t.fbo)}
+    Object.assign(this,keep);this.draw();
+  }
+};
+const INK=(!/[?&]ink=cpu\b/.test(location.search)&&INK_GL.boot())?INK_GL:INK_CPU;
+
+for(const ink of [INK_GL,INK_CPU])ink.idle=function(){return !this.drops.length&&this.quiet>10};
+
+/* ---------- watercolor helpers and renderer, carried over from the main app ---------- */
+function paint(pc,v,a,paper,dl){
+  const k=sstep(.3,.7,v), s=48+52*k;
+  const l=(paper?60-8*k:33+27*k)+(dl||0);
+  return 'hsla('+hueOf(pc)+','+s.toFixed(0)+'%,'+l.toFixed(0)+'%,'+a+')';
+}
+function blob(x,y,r,pts,j){
+  const n=pts.length,P=[];
+  for(let k=0;k<n;k++){const a=k/n*6.2832,rr=r*pts[k]*(1+(Math.random()-.5)*j);P.push(x+Math.cos(a)*rr,y+Math.sin(a)*rr*.88)}
+  g.beginPath();g.moveTo((P[2*n-2]+P[0])/2,(P[2*n-1]+P[1])/2);
+  for(let k=0;k<n;k++){const m=(k+1)%n;g.quadraticCurveTo(P[2*k],P[2*k+1],(P[2*k]+P[2*m])/2,(P[2*k+1]+P[2*m+1])/2)}
+  g.closePath();
+}
+
+
+/* ---------- watercolor textures made by Codex (see design-previews/watercolor-asset-brief.md). Each file is black on
+   transparent: only its opacity is used, and the renderer fills it with the note's color. Missing files fall back
+   to the drawn washes below. ---------- */
+const WC_TEX={washes:[],edges:[],grain:[],paper:null,state:'loading',
+  base:'../../assets/watercolor/',
+  img(src){return new Promise(ok=>{const i=new Image();i.onload=()=>ok(i);i.onerror=()=>ok(null);i.src=this.base+src})},
+  async load(){
+    if(/[?&]stamps=test\b/.test(location.search)){this.makeTest();return}
+    try{
+      const r=await fetch(this.base+'manifest.json',{cache:'no-cache'});
+      if(!r.ok)throw 0;
+      const m=await r.json(),get=async list=>(await Promise.all((list||[]).map(f=>this.img(f)))).filter(Boolean);
+      [this.washes,this.edges,this.grain]=await Promise.all([get(m.washes),get(m.edges),get(m.grain)]);
+      this.paper=m.paper?await this.img(m.paper):null;
+      this.state='files';
+    }catch(e){this.state='none'}
+  },
+  /* stand-in stamps drawn by code, only for checking the stamp path before the real files exist */
+  makeTest(){
+    const mk=(draw)=>{const c=document.createElement('canvas');c.width=c.height=512;const x=c.getContext('2d');draw(x);return c};
+    const outline=(x,seed)=>{const P=[];for(let k=0;k<22;k++){const a=k/22*6.2832,r=150*(.75+.35*Math.sin(k*1.7+seed)+.15*Math.random());P.push([256+Math.cos(a)*r,256+Math.sin(a)*r*.85])}
+      x.beginPath();x.moveTo((P[21][0]+P[0][0])/2,(P[21][1]+P[0][1])/2);for(let k=0;k<22;k++){const n=P[(k+1)%22];x.quadraticCurveTo(P[k][0],P[k][1],(P[k][0]+n[0])/2,(P[k][1]+n[1])/2)}x.closePath()};
+    for(let i=0;i<6;i++)this.washes.push(mk(x=>{x.filter='blur(5px)';outline(x,i);x.fillStyle='rgba(0,0,0,.45)';x.fill();x.lineWidth=8;x.strokeStyle='rgba(0,0,0,.6)';x.stroke()}));
+    for(let i=0;i<4;i++)this.edges.push(mk(x=>{x.filter='blur(1.5px)';outline(x,i);x.lineWidth=5;x.strokeStyle='rgba(0,0,0,.8)';x.stroke()}));
+    this.grain.push(mk(x=>{for(let k=0;k<9000;k++){x.fillStyle='rgba(0,0,0,'+(.1+.5*Math.random()).toFixed(2)+')';x.fillRect(Math.random()*512,Math.random()*512,1+Math.random()*2,1+Math.random()*2)}}));
+    this.state='test';
+  },
+  label(){
+    if(this.state==='loading')return 'Watercolor textures: loading…';
+    if(this.state==='test')return 'Watercolor textures: stand-in test stamps (not the real art)';
+    if(!this.washes.length&&!this.paper)return 'Watercolor textures: drawn washes (no texture files found)';
+    return 'Watercolor textures: '+this.washes.length+' washes, '+this.edges.length+' edges, '+this.grain.length+' grain'+(this.paper?', paper':'');
+  },
+  /* fill a stamp's shape with one color on a small canvas of its own */
+  tint(src,color,grain){
+    const c=document.createElement('canvas');c.width=c.height=256;const x=c.getContext('2d');
+    x.fillStyle=color;x.fillRect(0,0,256,256);
+    x.globalCompositeOperation='destination-in';x.drawImage(src,0,0,256,256);
+    /* pigment settles unevenly: knock a little speckle out of the wash */
+    if(grain){x.globalCompositeOperation='destination-out';x.globalAlpha=.35;
+      const ox=Math.random()*256,oy=Math.random()*256;
+      for(const [dx,dy] of [[0,0],[-256,0],[0,-256],[-256,-256]])x.drawImage(grain,ox+dx,oy+dy,256,256)}
+    return c;
+  }
+};
+WC_TEX.load().then(()=>{if(typeof window.__wcTexReady==='function')window.__wcTexReady()});
+
+/* ---------- style 1: watercolor. Translucent glazes layered on cold-press paper; each wash spreads softly, pools pigment at its edge as it dries, and sometimes blooms ---------- */
+const WC={fps:60,blooms:[],tick:0,cov:null,
+  step(){},resize(){},idle(){return true},
+  init(){
+    g.globalCompositeOperation='source-over';
+    const paper=g.createLinearGradient(0,0,W,H);
+    paper.addColorStop(0,'#fffdf8');paper.addColorStop(1,'#f6efe1');
+    g.fillStyle=paper;g.fillRect(0,0,W,H);
+    if(WC_TEX.paper){g.fillStyle=g.createPattern(WC_TEX.paper,'repeat');g.fillRect(0,0,W,H);this.blooms=[];this.tick=0;this.cov=new Float32Array(40);return}
+    /* cold-press tooth: faint soft blotches and a fine speckle */
+    for(let i=0;i<90;i++){const x=rnd(W),y=rnd(H),r=rnd(20,90),c=Math.random()<.5?'120,100,70':'255,252,244',rg=g.createRadialGradient(x,y,0,x,y,r);
+      rg.addColorStop(0,'rgba('+c+','+rnd(.015,.035).toFixed(3)+')');rg.addColorStop(1,'rgba('+c+',0)');g.fillStyle=rg;g.fillRect(x-r,y-r,r*2,r*2)}
+    for(let i=0;i<W*H/220;i++){g.fillStyle='rgba(110,90,60,'+rnd(.02,.06).toFixed(3)+')';g.fillRect(rnd(W),rnd(H),1,1)}
+    this.blooms=[];this.tick=0;this.cov=new Float32Array(40);
+  },
+  cell(x,y){return clamp((x/W*8)|0,0,7)+8*clamp((y/H*5)|0,0,4)},
+  frame(F){
+    ++this.tick;
+    if(this.tick%30===0)for(let i=0;i<40;i++)this.cov[i]*=LAYOUT.tight?.99:.9;
+    for(const n of F.notes){
+      const p=F.onset?n.s*.5:n.s*.035*(.4+F.energy);
+      if(Math.random()<p&&this.blooms.length<60)this.spawn(n,F);
+    }
+    for(let i=this.blooms.length-1;i>=0;i--){
+      const b=this.blooms[i],q=b.age/b.life,r=b.R*(.3+.7*Math.sqrt(q)),a=.028*(1-q)+.006;
+      b.x+=b.dx;b.y+=b.dy;b.dx*=.995;b.dy*=.995;
+      if(b.tex){
+        // A pale, wide glaze spreads ahead of the concentrated pigment and overlaps nearby washes.
+        g.save();
+        g.globalCompositeOperation='multiply';
+        for(let k=0;k<b.tex.length;k++){
+          const l=b.L[k], spread=Math.sqrt(q), rr=b.R*l.s*(.96+.38*spread);
+          g.translate(b.x+l.ox*r,b.y+l.oy*r);
+          g.rotate(b.rot+k);
+          const veil=rr*(1.18+.15*spread);
+          g.globalAlpha=a*l.a*.57;
+          g.filter='blur('+Math.max(3,Math.round(veil*.053))+'px)';
+          g.drawImage(b.tex[k],-veil,-veil*.86,veil*2,veil*1.72);
+          g.filter='none';
+          g.globalAlpha=a*l.a*.91;
+          g.drawImage(b.tex[k],-rr,-rr*.86,rr*2,rr*1.72);
+          g.setTransform(DPR,0,0,DPR,0,0);
+        }
+        g.restore();
+        if(++b.age>b.life)this.blooms.splice(i,1);
+        continue;
+      }
+      /* one or two glazes per wash; the second is offset and may carry a neighboring hue, like wet-in-wet */
+      for(let k=0;k<b.L.length;k++){const l=b.L[k],rr=r*l.s,x=b.x+l.ox*r,y=b.y+l.oy*r,al=a*l.a;
+        const wash=g.createRadialGradient(x,y,rr*.1,x,y,rr*1.2);
+        wash.addColorStop(0,paint(l.pc,b.v,al*.55,true,12));
+        wash.addColorStop(.6,paint(l.pc,b.v,al*.95,true,2));
+        wash.addColorStop(.86,paint(l.pc,b.v,al*1.5,true,-12));
+        wash.addColorStop(1,paint(l.pc,b.v,0,true));
+        blob(x,y,rr,l.pts,.012);g.fillStyle=wash;g.fill();
+        if(b.age%9===k*4){g.lineWidth=rnd(.5,1.1);g.strokeStyle=paint(l.pc,b.v,al*.6,true,-18);g.stroke()}
+      }
+      /* a back-run: a drop of water pushes pigment outward and leaves a frilled edge */
+      if(b.bl&&b.age===b.blAt){const br=r*rnd(.25,.45),bx=b.x+rnd(-.3,.3)*r,by=b.y+rnd(-.3,.3)*r,pts=[];
+        for(let k=0;k<22;k++)pts.push(.88+Math.random()*.24);
+        const rg=g.createRadialGradient(bx,by,0,bx,by,br);rg.addColorStop(0,'rgba(255,249,236,.24)');rg.addColorStop(.8,'rgba(255,249,236,.1)');rg.addColorStop(1,'rgba(255,249,236,0)');
+        blob(bx,by,br,pts,.08);g.fillStyle=rg;g.fill();g.lineWidth=.8;g.strokeStyle=paint(b.pc,b.v,.14,true,-20);g.stroke()}
+      /* granulation settles in the middle of the wash */
+      if(b.age===b.life>>1){g.fillStyle=paint(b.pc,b.v,.1,true,-22);
+        for(let k=0;k<14;k++){const an=rnd(6.2832),d=r*.8*Math.sqrt(Math.random());g.fillRect(b.x+Math.cos(an)*d,b.y+Math.sin(an)*d,rnd(.8,1.8),rnd(.8,1.8))}}
+      /* as it dries, pigment pools into a fine dark edge */
+      if(++b.age>b.life){blob(b.x,b.y,r,b.L[0].pts,.01);g.lineWidth=1.5;g.strokeStyle=paint(b.pc,b.v,.4,true,-24);g.stroke();this.blooms.splice(i,1)}
+    }
+  },
+  spawn(n,F){
+    const M=Math.min(W,H),c=this.cov;let bx=0,by=0,best=1e9;
+    /* try a few places at this note's height and take the least painted one, so the page fills evenly; a cell that is already full is left to breathe */
+    for(let t=0;t<4;t++){const x=LAYOUT.x==null?rnd(W*.02,W*.98):clamp(W*(LAYOUT.x+rnd(-LAYOUT.xs,LAYOUT.xs)),W*.02,W*.98),y=clamp(yOf(n.midi)+rnd(-.24,.24)*LAYOUT.band*H,H*.05,H*.95),s=c[this.cell(x,y)]+Math.random()*.3;if(s<best){best=s;bx=x;by=y}}
+    if(best>(LAYOUT.tight?.75:2.4))return;
+    const R=M*(.07+.20*n.s*(.5+F.energy))*(n.midi<52?1.35:1)*LAYOUT.size;c[this.cell(bx,by)]+=R/M*6;
+    const L=[],nl=Math.random()<.45?2:1;
+    for(let k=0;k<nl;k++){const pts=[];for(let j=0;j<18;j++)pts.push(.7+Math.random()*.6);
+      L.push({pts,s:k?rnd(.55,.85):1,ox:k?rnd(-.35,.35):0,oy:k?rnd(-.3,.3):0,a:k?.75:1,pc:k?(F.notes.find(other=>other.pc!==n.pc)?.pc??n.pc):n.pc})}
+    const life=(70+rnd(80))|0;
+    const b={x:bx,y:by,pc:n.pc,v:n.v,age:0,life,pts:L[0].pts,R,L,dx:rnd(-.15,.15),dy:rnd(0,.18),bl:Math.random()<.3,blAt:(life*rnd(.45,.75))|0,rot:rnd(6.2832)};
+    const T=WC_TEX,pick=list=>list[(Math.random()*list.length)|0];
+    if(T.washes.length){
+      const gr=T.grain.length?pick(T.grain):null;
+      b.tex=L.map(l=>T.tint(pick(T.washes),'hsl('+hueOf(l.pc)+','+(73+25*clamp(b.v)).toFixed(0)+'%,'+(55-5*clamp(b.v)).toFixed(0)+'%)',gr));
+      /* separate dried-edge rings are not used: the wash images already carry their own rims, and extra rings
+         rarely lined up with them, so they read as loose outlines */
+    }
+    this.blooms.push(b);
+  }
+};
+
+/* ---------- style 4: glass diamond. Light is followed into a cut stone, bounced around inside and split into
+   color. One colored lamp per note lights the room only while that note sounds, so the stone takes its colors
+   from whatever the chosen trigger sends. Built and tuned in diamond-glass.html. ---------- */
+const GLASS=(()=>{
+/* ---------- the stone: a round brilliant cut, 57 flat facets ----------
+   Each facet is stored as a flat plane. The stone is the space inside all 57 planes, which lets the graphics card
+   follow a ray of light into the glass, bounce it around inside, and see where it comes back out. */
+const V=[],FACETS=[];
+const ring=(r,y,n,off)=>{const s=V.length;for(let i=0;i<n;i++){const a=(i+off)/n*Math.PI*2;V.push([Math.cos(a)*r,y+.2,Math.sin(a)*r])}return s};
+const T=ring(.56,.36,8,0),S=ring(.8,.2,8,.5),G=ring(1,0,16,0),L=ring(.47,-.5,8,.5),C=V.length;V.push([0,-.66,0]);
+const m8=i=>(i+8)%8,m16=i=>(i+16)%16;
+FACETS.push([0,1,2,3,4,5,6,7].map(i=>T+i));
+for(let i=0;i<8;i++){
+  FACETS.push([T+i,T+m8(i+1),S+i],[T+i,S+i,G+2*i,S+m8(i-1)],[S+i,G+m16(2*i+1),G+2*i],[S+i,G+m16(2*i+2),G+m16(2*i+1)],
+    [C,L+m8(i-1),G+2*i,L+i],[L+i,G+2*i,G+m16(2*i+1)],[L+i,G+m16(2*i+1),G+m16(2*i+2)]);
+}
+const PLANES=new Float32Array(57*4);
+FACETS.forEach((f,k)=>{
+  const a=V[f[0]],b=V[f[1]],c=V[f[2]];
+  let nx=(b[1]-a[1])*(c[2]-a[2])-(b[2]-a[2])*(c[1]-a[1]),ny=(b[2]-a[2])*(c[0]-a[0])-(b[0]-a[0])*(c[2]-a[2]),nz=(b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]);
+  const m=Math.hypot(nx,ny,nz);nx/=m;ny/=m;nz/=m;
+  let mx=0,my=0,mz=0;for(const i of f){mx+=V[i][0];my+=V[i][1];mz+=V[i][2]}
+  if(nx*mx+ny*(my-f.length*.05)+nz*mz<0){nx=-nx;ny=-ny;nz=-nz}
+  let d=-1e9;for(const i of f)d=Math.max(d,nx*V[i][0]+ny*V[i][1]+nz*V[i][2]);
+  PLANES.set([nx,ny,nz,d],k*4);
+});
+
+/* a second shape for the same glass: a rock crystal, six long sides with a six-sided point at each end */
+const CRYSTAL=new Float32Array(57*4);
+for(let i=0;i<6;i++){
+  const a=i/6*Math.PI*2,cx=Math.cos(a),cz=Math.sin(a),alt=i%2;
+  CRYSTAL.set([cx,0,cz,.42*(alt?.97:1.03)],i*4);
+  CRYSTAL.set([cx*.6/.7324,.42/.7324,cz*.6/.7324,.7455*(alt?.965:1)],(6+i)*4);
+  CRYSTAL.set([cx*.35/.5467,-.42/.5467,cz*.35/.5467,.8835*(alt?1:.97)],(12+i)*4);
+}
+const SHAPES={
+  crystal:{planes:CRYSTAL,n:18,ior:1.5,spread:.035,zoom:.5,edge:.01,tilt:.22,nod:.06,lean:.28,white:.7,expo:1.05,floor:-1.42,sparkle:0,label:'Crystal'},
+  diamond:{planes:PLANES,n:57,ior:2.42,spread:.06,zoom:.42,edge:.005,tilt:.07,nod:.03,lean:0,white:.3,expo:.5,floor:-.98,sparkle:1,label:'Diamond'}
+};
+let shape='diamond';
+/* in silence the glass keeps a faint cool tint, so it never looks grey */
+const idle=new Float32Array(12),sendLev=new Float32Array(12);
+for(let pc=0;pc<12;pc++){const h=((pc*7)%12)*30;idle[pc]=h>=150&&h<=270?.32:0}
+
+/* how strongly each of the twelve notes is sounding right now */
+const lev=new Float32Array(12),viv=new Float32Array(12);
+let spin=0,time=0,flash=0,energy=0;
+function hear(F){
+  for(const n of F.notes){const l=n.s*(.35+.65*F.energy);if(l>lev[n.pc])lev[n.pc]=l;if(n.v>viv[n.pc])viv[n.pc]=n.v}
+  if(F.onset)flash=Math.min(1,flash+.5+F.flux*.5);
+  energy+=(F.energy-energy)*.1;
+}
+/* the twelve note colors, the same hues as the rest of the app, as red-green-blue light */
+const NOTE_RGB=new Float32Array(36);
+for(let pc=0;pc<12;pc++){const h=hueOf(pc)/60,f=n=>{const k=(n+h)%6;return 1-Math.max(0,Math.min(k,4-k,1))*.92};NOTE_RGB.set([f(5),f(3),f(1)],pc*3)}
+
+const FS=`#version 300 es
+precision highp float;
+out vec4 o;
+uniform vec2 uRes;
+uniform mat3 uToStone,uToRoom;
+uniform vec4 uPlanes[57];
+uniform float uLev[12];
+uniform vec3 uCol[12];
+uniform vec3 uKey;
+uniform float uFlash,uSpin,uSpread,uGlow,uIor,uZoom,uEdge,uWhite,uExpo,uFloor,uPulse;
+uniform vec3 uTint;
+float gBack;
+uniform int uN;
+
+/* the room the stone sits in: a dark studio, a moving white key light, two soft white strips for contrast, and
+   one colored lamp per note. A lamp is only on while its note is sounding. */
+vec3 room(vec3 d){
+  vec3 c=vec3(.012,.014,.022)+.03*max(d.y,0.);
+  float k=max(dot(d,uKey),0.);
+  c+=vec3(1.,.98,.95)*(pow(k,60.)*(5.+6.*uFlash)+pow(k,6.)*.35)*(.4+.6*uWhite);
+  c+=vec3(.9,.95,1.)*smoothstep(.06,.0,abs(d.y-.55+.2*d.x))*step(0.,d.z)*uWhite;
+  c+=vec3(1.)*smoothstep(.05,.0,abs(d.x+.6-.3*d.y))*step(d.z,0.)*uWhite*.75;
+  for(int i=0;i<12;i++){
+    float a=float(i)*.5236+uSpin*.35;
+    vec3 l=normalize(vec3(cos(a),.25+.45*sin(a*3.),sin(a)));
+    float w=max(dot(d,l),0.);
+    c+=uCol[i]*uLev[i]*(pow(w,14.)*uGlow+pow(w,3.)*.3);
+  }
+  vec3 q=floor(d*22.);float hsh=fract(sin(dot(q,vec3(12.9898,78.233,37.719)))*43758.5453);
+  c+=uTint*step(.965,hsh)*uPulse*5.;
+  return c;
+}
+float schlick(float c){float r=(uIor-1.)/(uIor+1.);r*=r;return r+(1.-r)*pow(1.-clamp(c,0.,1.),5.);}
+
+/* follow one color of light through the glass. A different bend for red, green and blue is what makes "fire". */
+float inside(vec3 p,vec3 n,vec3 rd,float ior,int ch){
+  vec3 d=refract(rd,n,1./ior);float keep=1.,sum=0.;
+  for(int b=0;b<6;b++){
+    float tf=1e9,tf2=1e9;vec3 nf=vec3(0.,1.,0.);
+    for(int i=0;i<57;i++){if(i>=uN)break;vec4 pl=uPlanes[i];float den=dot(pl.xyz,d);if(den>1e-5){float t=(pl.w-dot(pl.xyz,p))/den;if(t<tf){tf2=tf;tf=t;nf=pl.xyz;}else if(t<tf2){tf2=t;}}}
+    if(b==0)gBack=smoothstep(uEdge*1.6,0.,tf2-tf);
+    p+=d*tf;
+    vec3 outd=refract(d,-nf,ior);
+    float F=1.;
+    if(dot(outd,outd)>0.){F=schlick(dot(outd,nf));sum+=keep*(1.-F)*room(uToRoom*outd)[ch];}
+    keep*=F;d=reflect(d,nf);p-=nf*1e-4;
+    if(keep<.03)break;
+  }
+  return sum+keep*room(uToRoom*d)[ch]*.6;
+}
+
+/* what one ray of sight sees if it meets the glass; hit says whether it did */
+vec3 glassAt(vec3 so,vec3 sd,out bool hit){
+  float tn=-1e9,tn2=-1e9,tf=1e9;vec3 nn=vec3(0.);bool miss=false;
+  for(int i=0;i<57;i++){if(i>=uN)break;vec4 pl=uPlanes[i];float den=dot(pl.xyz,sd),dist=dot(pl.xyz,so)-pl.w;
+    if(den<-1e-6){float t=-dist/den;if(t>tn){tn2=tn;tn=t;nn=pl.xyz;}else if(t>tn2){tn2=t;}}
+    else if(den>1e-6){tf=min(tf,-dist/den);}
+    else if(dist>0.)miss=true;}
+  hit=!miss&&tn<tf&&tn>0.;
+  if(!hit)return vec3(0.);
+  vec3 p=so+sd*tn;
+  float F=schlick(dot(-sd,nn));
+  gBack=0.;
+  vec3 glass=vec3(inside(p,nn,sd,uIor-uSpread,0),inside(p,nn,sd,uIor,1),inside(p,nn,sd,uIor+uSpread,2));
+  vec3 col=F*room(uToRoom*reflect(sd,nn))+(1.-F)*glass;
+  /* thin bright lines where faces meet: the near edges, and more faintly the far edges seen through the glass */
+  col+=vec3(.75,.85,1.)*(smoothstep(uEdge,0.,tn-tn2)*.7+gBack*.32);
+  return col;
+}
+void main(){
+  vec2 uv=(gl_FragCoord.xy*2.-uRes)/uRes.y;uv.y-=.12;
+  vec3 ro=vec3(0.,0.,4.),rd=normalize(vec3(uv*uZoom,-1.));
+  bool hit;vec3 col=glassAt(uToStone*ro,uToStone*rd,hit);
+  if(!hit){
+    /* backdrop: studio glow, the incoming beam, a soft shadow, and colored light thrown on the floor */
+    col=mix(vec3(.004,.004,.007),vec3(.035,.035,.05),smoothstep(1.6,0.,length((uv+vec2(0.,.5))*vec2(.6,1.))));
+    vec2 a=vec2(-1.9,1.25),b=vec2(-.2,.25),pa=uv-a,ba=b-a;float h=clamp(dot(pa,ba)/dot(ba,ba),0.,1.);
+    col+=vec3(.9,.92,1.)*smoothstep(.04+.2*h,0.,length(pa-ba*h))*(.006+.022*h)*(1.+2.*uFlash);
+    float fy=uv.y+.86;
+    col*=1.-.6*exp(-(uv.x*uv.x*2.5+fy*fy*40.));
+    for(int i=0;i<12;i++){
+      float an=float(i)*.5236+uSpin;vec2 c=vec2(cos(an)*.55,-.9+.07*sin(an));
+      vec2 q=(uv-c)*vec2(3.2,11.);float s=sin(an*2.+.5);q=vec2(q.x+q.y*s*.6,q.y);
+      col+=uCol[i]*uLev[i]*exp(-dot(q,q))*.5;
+    }
+    /* the floor is a dark polished surface, so the glass is mirrored in it, fading with distance */
+    if(rd.y<-1e-4){
+      float t=(uFloor-ro.y)/rd.y;vec3 pf=ro+rd*t;
+      bool h2;vec3 mir=glassAt(uToStone*pf,uToStone*vec3(rd.x,-rd.y,rd.z),h2);
+      if(h2)col+=mir*.38*exp(-.45*length(pf.xz));
+    }
+  }
+  col=1.-exp(-col*uExpo);
+  col=pow(col,vec3(.4545));
+  float n=fract(sin(dot(gl_FragCoord.xy,vec2(12.9898,78.233)))*43758.5453);
+  o=vec4(col+(n-.5)/255.,1.);
+}`;
+
+const gc=document.createElement('canvas'),gl=gc.getContext('webgl2',{antialias:false,alpha:false});
+let prog=null,U={};
+const look={glow:11};
+function build(){
+  const sh=(t,src)=>{const s=gl.createShader(t);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(s));return s};
+  prog=gl.createProgram();
+  gl.attachShader(prog,sh(gl.VERTEX_SHADER,'#version 300 es\nvoid main(){vec2 p=vec2(float((gl_VertexID<<1)&2),float(gl_VertexID&2));gl_Position=vec4(p*2.-1.,0.,1.);}'));
+  gl.attachShader(prog,sh(gl.FRAGMENT_SHADER,FS));gl.linkProgram(prog);
+  if(!gl.getProgramParameter(prog,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(prog));
+  gl.useProgram(prog);
+  for(const n of ['uRes','uToStone','uToRoom','uPlanes','uLev','uCol','uKey','uFlash','uSpin','uSpread','uGlow','uIor','uZoom','uEdge','uN','uWhite','uExpo','uFloor','uPulse','uTint'])U[n]=gl.getUniformLocation(prog,n);
+  gl.uniform3fv(U.uCol,NOTE_RGB);
+}
+function setShape(name){
+  shape=name;const S=SHAPES[name];
+  if(ok||prog){gl.uniform4fv(U.uPlanes,S.planes);gl.uniform1i(U.uN,S.n);gl.uniform1f(U.uIor,S.ior);gl.uniform1f(U.uSpread,S.spread);gl.uniform1f(U.uZoom,S.zoom);gl.uniform1f(U.uEdge,S.edge);gl.uniform1f(U.uWhite,S.white);gl.uniform1f(U.uExpo,S.expo);gl.uniform1f(U.uFloor,S.floor)}
+  const b=$('shape');if(b)b.textContent='Shape: '+S.label;
+}
+let ok=false;
+try{if(gl){build();setShape(shape);ok=true}}catch(e){console.warn('Glass diamond could not start',e)}
+
+function draw(){
+  if(!ok){g.fillStyle='#111016';g.fillRect(0,0,W,H);return}
+  time+=1/60;
+  for(let i=0;i<12;i++){lev[i]*=.975;viv[i]*=.99}
+  flash*=.92;if(audio.paused)energy*=.97;
+  /* the stone turns slowly and nods a little; louder music turns it slightly faster */
+  spin+=.0012+energy*.011;
+  const S=SHAPES[shape],tilt=S.tilt+S.nod*Math.sin(time*.21),c=Math.cos(spin),s=Math.sin(spin),ct=Math.cos(tilt),st=Math.sin(tilt);
+  /* rows of the turn that takes the stone into the room: spin about its own axis, tilt toward the viewer, then lean */
+  const M0=[[c,0,s],[st*s,ct,-st*c],[-ct*s,st,ct*c]],cl=Math.cos(S.lean),sl=Math.sin(S.lean);
+  const M=[M0[0].map((v,k)=>cl*v-sl*M0[1][k]),M0[0].map((v,k)=>sl*v+cl*M0[1][k]),M0[2]];
+  const cols=m=>[m[0][0],m[1][0],m[2][0],m[0][1],m[1][1],m[2][1],m[0][2],m[1][2],m[2][2]];
+  const Mt=[[M[0][0],M[1][0],M[2][0]],[M[0][1],M[1][1],M[2][1]],[M[0][2],M[1][2],M[2][2]]];
+  /* the white light drifts across the upper left */
+  const la=-.85+.45*Math.sin(time*.27),kx=Math.sin(la),ky=.75,kz=.6+.2*Math.cos(time*.19),kn=Math.hypot(kx,ky,kz);
+  gl.viewport(0,0,gc.width,gc.height);
+  gl.uniform2f(U.uRes,gc.width,gc.height);
+  gl.uniformMatrix3fv(U.uToRoom,false,cols(M));gl.uniformMatrix3fv(U.uToStone,false,cols(Mt));
+  /* the cool resting tint shows only in silence; as notes sound it steps aside so the trigger's colors take over */
+  let sum=0;for(let i=0;i<12;i++)sum+=lev[i];const rest=Math.max(0,1-sum*2.5);
+  for(let i=0;i<12;i++)sendLev[i]=Math.max(Math.min(1,lev[i]*1.6),idle[i]*rest);
+  gl.uniform1fv(U.uLev,sendLev);gl.uniform3f(U.uKey,kx/kn,ky/kn,kz/kn);
+  /* sparkle takes the blended color of the notes sounding now, and flares with each beat */
+  let tr=0,tg=0,tb=0,tw=0;for(let i=0;i<12;i++){const w=lev[i];tr+=NOTE_RGB[i*3]*w;tg+=NOTE_RGB[i*3+1]*w;tb+=NOTE_RGB[i*3+2]*w;tw+=w}
+  if(tw>.01)gl.uniform3f(U.uTint,tr/tw,tg/tw,tb/tw);else gl.uniform3f(U.uTint,.8,.9,1);
+  gl.uniform1f(U.uPulse,Math.min(1,flash*.9+energy*.5)*(tw>.01?1:0)*SHAPES[shape].sparkle);
+  gl.uniform1f(U.uFlash,flash);gl.uniform1f(U.uSpin,spin);gl.uniform1f(U.uGlow,look.glow);
+  gl.drawArrays(gl.TRIANGLES,0,3);
+  g.globalCompositeOperation='source-over';g.drawImage(gc,0,0,W,H);
+}
+
+
+  const size=()=>{const k=Math.min(1,1600/Math.max(cv.width,cv.height,1));gc.width=Math.max(2,Math.round(cv.width*k));gc.height=Math.max(2,Math.round(cv.height*k))};
+  return {fps:60,
+    get ok(){return ok},
+    init(){lev.fill(0);viv.fill(0);flash=0;energy=0;size();draw()},
+    frame(F){hear(F)},
+    step(){draw()},
+    resize(){size();draw()},
+    /* after the song ends the stone keeps turning until its colors have faded back to the resting tint */
+    idle(){let m=0;for(let i=0;i<12;i++)m=Math.max(m,lev[i]);return m<.03}
+  };
+})();
+
+/* ---------- musical shapes. Each attack places a clear form: color from the note, height from pitch, size from
+   strength. A playhead walks left to right so a phrase reads like a line of music, and every form thins out and
+   spreads over a few seconds so the next phrase is easy to follow ---------- */
+const SH={fps:60,list:[],t:0,last:-9,
+  init(){this.list=[];this.t=0;this.last=-9;this.draw()},
+  resize(){this.draw()},
+  idle(){return !this.list.length},
+  frame(F){
+    if(!F||F.energy<.035||this.t-this.last<(F.onset?.3:.8))return;
+    const notes=F.notes.filter(n=>n.s>.22).slice(0,4);if(!notes.length)return;
+    this.last=this.t;
+    const M=Math.min(W,H);
+    const sweep=(audio.currentTime%12)/12;
+    const px=W*(LAYOUT.x??(.08+.84*sweep));
+    notes.forEach((n,i)=>{
+      const lead=i===0,ring=lead||(F.onset&&i<3&&n.s>.55);
+      const x=clamp(px+(i%2?1:-1)*i*W*.04,W*.045,W*.955);
+      const y=clamp(yOf(n.midi)+(i%2?1:-1)*i*H*.036,H*.16,H*.86);
+      const hue=hueOf(n.pc),sat=91+9*n.v,age=LAYOUT.hold?.5:0;
+      const r=M*((ring?.12:.045)+n.s*(ring?.13:.09)*(.45+F.energy));
+      const name=n.part?PARTS[n.part].label:NOTE[n.midi%12];
+      this.list.push({x,y,r,hue,sat,kind:ring?'ring':'disc',name,lead,age,life:ring?12:10});
+      this.list.push({x:x+rnd(-.07,.07)*W,y:y+rnd(-.12,.12)*H,r:r*rnd(.55,.92),hue,sat,kind:'disc',age,life:10});
+      this.list.push({x:x+rnd(-.09,.09)*W,y:clamp(y+rnd(-.16,.16)*H,H*.10,H*.90),r:M*rnd(.025,.10),hue,sat,kind:'tick',age,life:8});
+    });
+    if(this.list.length>(LAYOUT.hold?600:200))this.list.splice(0,this.list.length-(LAYOUT.hold?600:200));
+  },
+  step(){this.t+=1/60;if(!LAYOUT.hold){for(const s of this.list)s.age+=1/60;this.list=this.list.filter(s=>s.age<s.life)}this.draw()},
+  draw(){
+    g.globalCompositeOperation='source-over';g.fillStyle='#fbf9f5';g.fillRect(0,0,W,H);
+    const col=(s,l,a)=>'hsla('+s.hue+','+s.sat.toFixed(0)+'%,'+l+'%,'+a.toFixed(3)+')';
+    const fade=s=>LAYOUT.hold?.8:Math.pow(1-s.age/s.life,1.5),pop=s=>.6+.4*sstep(0,.25,s.age);
+    /* Translucent fields keep their bright hues where several notes overlap. */
+    for(const s of this.list){
+      if(s.kind==='tick')continue;
+      const a=fade(s),r=s.r*pop(s)*(1+.3*s.age/s.life);
+      g.fillStyle=col(s,63,(s.kind==='ring'?.27:.23)*a);g.beginPath();g.arc(s.x,s.y,r*(s.lead?1.25:1),0,6.2832);g.fill();
+    }
+    g.globalCompositeOperation='source-over';g.lineCap='round';
+    /* a thin line ties the leading notes together in the order they were played */
+    const leads=this.list.filter(s=>s.lead);
+    for(let i=1;i<leads.length;i++){
+      const p=leads[i-1],q=leads[i];if(q.x<p.x)continue;
+      const lg=g.createLinearGradient(p.x,p.y,q.x,q.y);lg.addColorStop(0,col(p,50,.7*fade(p)));lg.addColorStop(1,col(q,50,.7*fade(q)));
+      g.strokeStyle=lg;g.lineWidth=1.6;g.beginPath();g.moveTo(p.x,p.y);
+      g.bezierCurveTo((p.x+q.x)/2,p.y,(p.x+q.x)/2,q.y,q.x,q.y);g.stroke();
+    }
+    const labels=new Set();
+    const labeled=new Set();
+    for(const s of [...this.list].reverse()){
+      if(s.kind==='ring'&&s.name&&s.age<s.life*.55&&!labels.has(s.name)&&labels.size<3){
+        labels.add(s.name);labeled.add(s);
+      }
+    }
+    for(const s of this.list){
+      const a=fade(s),k=pop(s);
+      if(s.kind==='tick'){g.strokeStyle=col(s,50,.85*a);g.lineWidth=2.5;g.beginPath();g.moveTo(s.x,s.y-s.r*1.1*k);g.lineTo(s.x,s.y+s.r*1.1*k);g.stroke()}
+      else if(s.kind==='ring'){
+        g.strokeStyle=col(s,48,.95*a);g.lineWidth=Math.max(3,s.r*.046);g.beginPath();g.arc(s.x,s.y,s.r*k,0,6.2832);g.stroke();
+        if(labeled.has(s)){const o=s.r*.72,side=s.x>W*.76?-1:1,lx=s.x+side*(o+10),ly=Math.max(42,s.y-o-6);g.strokeStyle='rgba(40,32,36,'+(.6*a).toFixed(2)+')';g.lineWidth=1;g.beginPath();g.moveTo(s.x+side*o*.95,s.y-o*.9);g.lineTo(lx,ly+4);g.stroke();
+          g.fillStyle='rgba(30,24,28,'+(.9*a).toFixed(2)+')';g.font='italic '+Math.round(Math.max(18,Math.min(34,s.r*.22)))+'px "Instrument Serif",Georgia,serif';g.textAlign=side<0?'right':'left';g.fillText(s.name,lx+side*3,ly);g.textAlign='left'}
+        g.fillStyle=col(s,48,a);g.beginPath();g.arc(s.x,s.y,Math.max(3,s.r*.09),0,6.2832);g.fill();
+      }
+    }
+  }
+};
+
+let AC=null,analyser=null,fbuf,bbuf,prevB,elSrc=null;
+let fluxAvg=0,lastOn=0;
+function ensureAC(){
+  if(!AC){
+    AC=new (window.AudioContext||window.webkitAudioContext)();
+    analyser=AC.createAnalyser();analyser.fftSize=8192;analyser.smoothingTimeConstant=.55;analyser.minDecibels=-100;analyser.maxDecibels=-10;
+    const mute=AC.createGain();mute.gain.value=0;analyser.connect(mute);mute.connect(AC.destination);
+    fbuf=new Float32Array(analyser.frequencyBinCount);bbuf=new Uint8Array(analyser.frequencyBinCount);prevB=new Uint8Array(analyser.frequencyBinCount);
+  }
+  if(AC.state==='suspended')AC.resume();
+}
+function analyse(now){
+  const F={notes:[],chroma:new Float32Array(12),energy:0,bass:0,bright:.5,onset:false,flux:0};
+  analyser.getFloatFrequencyData(fbuf);analyser.getByteFrequencyData(bbuf);
+  const hz=AC.sampleRate/analyser.fftSize,lo=Math.ceil(60/hz),hi=Math.min(fbuf.length-2,Math.floor(5000/hz)),top=Math.min(bbuf.length,Math.floor(9000/hz));
+  let flux=0,sum=0,bs=0,bn=0,cw=0;
+  for(let i=1;i<top;i++){const b=bbuf[i],d=b-prevB[i];if(d>0)flux+=d;prevB[i]=b;sum+=b;if(i*hz<160){bs+=b;bn++}cw+=b*Math.log2(i*hz)}
+  flux/=top*255;
+  let mx=-200;for(let i=lo;i<=hi;i++)if(fbuf[i]>mx)mx=fbuf[i];
+  F.energy=mx<-78?0:clamp(clamp((sum/(top*255)-.1)*2)*.5+clamp((mx+72)/50)*.6);
+  F.bass=clamp(bs/(bn*255)*1.25);
+  F.bright=sum?clamp((cw/sum-8.6)/2.6):.5;
+  if(flux>fluxAvg*1.6+.004&&now-lastOn>110&&F.energy>.05){F.onset=true;lastOn=now}
+  fluxAvg=fluxAvg*.93+flux*.07;
+  F.flux=clamp(flux*18);
+  if(mx<-78)return F;
+  const floor=mx-32,best=new Map();
+  for(let i=lo;i<=hi;i++){const v=fbuf[i];
+    if(v>floor&&v>fbuf[i-1]&&v>=fbuf[i+1]){const m=Math.round(69+12*Math.log2(i*hz/440)),s=(v-floor)/32;if(!(best.get(m)>=s))best.set(m,s)}}
+  let cm=0;
+  best.forEach((s,m)=>{F.notes.push({midi:m,pc:m%12,s,v:0});F.chroma[m%12]+=s;if(F.chroma[m%12]>cm)cm=F.chroma[m%12]});
+  if(cm)for(let i=0;i<12;i++)F.chroma[i]/=cm;
+  F.notes.sort((a,b)=>b.s-a.s);F.notes.length=Math.min(F.notes.length,6);
+  for(const n of F.notes)n.v=vivid(n,F);
+  return F;
+}
+
+/* =====================================================================================================
+   Triggers (added on top of the preferred preview). With "Notes" selected, nothing below changes what the
+   renderers receive, so the default look and motion are exactly those of three-styles.html.
+   ===================================================================================================== */
+/* Layout hints. Defaults leave every renderer exactly as it was. */
+const LAYOUT={x:null,xs:.05,band:1,hold:false,tight:false,prog:0,size:1};
+let trigger='notes';
+const TRIGGER_NAMES={notes:'Notes',pitch:'Pitch',instruments:'Instruments',harmony:'Harmony',whole:'Whole Song'};
+
+/* the preferred demo (18 s) has known chords: Am, F, C, G, each lasting 4.25 s */
+const ORIG_CHORDS=[
+  {name:'Am',root:9,minor:true, t:0,   pad:[57,60,64,69]},
+  {name:'F', root:5,minor:false,t:4.25,pad:[53,57,60,65]},
+  {name:'C', root:0,minor:false,t:8.5, pad:[48,55,64,67]},
+  {name:'G', root:7,minor:false,t:12.75,pad:[55,59,62,71]}];
+/* a second, 20 s "known parts" demo for Instruments: four parts generated separately */
+const KNOWN_DURATION=20;
+const KNOWN_CHORDS=[
+  {name:'Am',root:9,minor:true, t:0, pad:[57,60,64],bass:45,mel:[69,72,76,81]},
+  {name:'F', root:5,minor:false,t:5, pad:[57,60,65],bass:41,mel:[72,77,81,84]},
+  {name:'C', root:0,minor:false,t:10,pad:[55,60,64],bass:48,mel:[84,79,76,72]},
+  {name:'G', root:7,minor:false,t:15,pad:[55,59,62],bass:43,mel:[71,67,62,59]}];
+/* pc = the note slot whose hue we borrow: hue = ((pc*7)%12)*30 */
+const PARTS={
+  bass: {label:'Bass', pc:6, gain:1, ink:[.16,.65]},
+  pad:  {label:'Pad',  pc:3, gain:.75, ink:[.68,.23]},
+  pluck:{label:'Pluck',pc:7, gain:.85, ink:[.83,.77]},
+  bell: {label:'Bell melody',pc:10,gain:1, ink:[.46,.52]}};
+function inkPartOrigin(part){
+  const [x,y]=PARTS[part].ink;
+  return [x+rnd(-.10,.10),y+rnd(-.13,.13)];
+}
+const EVENTS=[];
+for(const c of KNOWN_CHORDS){
+  for(const o of [0,2.5])EVENTS.push({part:'bass',t:c.t+o,dur:2.3,midi:c.bass});
+  for(const m of c.pad)EVENTS.push({part:'pad',t:c.t,dur:5,midi:m});
+  for(let k=0;k<8;k++)EVENTS.push({part:'pluck',t:c.t+.3+k*.6,dur:.55,midi:c.pad[[0,1,2,1,0,1,2,1][k]]+12});
+  c.mel.forEach((m,k)=>EVENTS.push({part:'bell',t:c.t+.2+k*1.2,dur:1.1,midi:m}));
+}
+EVENTS.sort((a,b)=>a.t-b.t);
+const TIMBRE={
+  bass:(f,tau)=>.34*Math.min(1,tau/.01)*Math.exp(-tau*1.3)*(Math.sin(2*Math.PI*f*tau)+.35*Math.sin(4*Math.PI*f*tau)),
+  pad:(f,tau,d)=>.07*Math.min(1,tau/.6)*Math.min(1,(d-tau)/.6)*(Math.sin(2*Math.PI*f*tau)+Math.sin(2*Math.PI*f*1.004*tau))*.5,
+  pluck:(f,tau)=>.13*Math.min(1,tau/.004)*Math.exp(-tau*7)*(Math.sin(2*Math.PI*f*tau)+.5*Math.sin(4*Math.PI*f*tau)+.25*Math.sin(6*Math.PI*f*tau)),
+  bell:(f,tau)=>.16*Math.min(1,tau/.004)*Math.exp(-tau*2.6)*(Math.sin(2*Math.PI*f*tau)+.4*Math.exp(-tau*3)*Math.sin(2*Math.PI*f*2.76*tau)+.25*Math.exp(-tau*5)*Math.sin(2*Math.PI*f*5.4*tau))};
+function buildKnownDemo(){
+  const rate=22050,mix=new Float32Array(rate*KNOWN_DURATION);
+  for(const p of Object.keys(PARTS)){                 /* each part is rendered on its own first, then mixed */
+    const buf=new Float32Array(mix.length);
+    for(const e of EVENTS)if(e.part===p){
+      const f=440*2**((e.midi-69)/12),o=Math.round(e.t*rate),n=Math.round(e.dur*rate);
+      for(let i=0;i<n&&o+i<buf.length;i++)buf[o+i]+=TIMBRE[p](f,i/rate,e.dur);
+    }
+    for(let i=0;i<mix.length;i++)mix[i]+=buf[i];
+  }
+  const buffer=new ArrayBuffer(44+mix.length*2),wav=new DataView(buffer);
+  for(const [o,w] of [[0,'RIFF'],[8,'WAVE'],[12,'fmt '],[36,'data']])[...w].forEach((c,i)=>wav.setUint8(o+i,c.charCodeAt(0)));
+  wav.setUint32(4,buffer.byteLength-8,true);wav.setUint32(16,16,true);wav.setUint16(20,1,true);wav.setUint16(22,1,true);
+  wav.setUint32(24,rate,true);wav.setUint32(28,rate*2,true);wav.setUint16(32,2,true);wav.setUint16(34,16,true);wav.setUint32(40,mix.length*2,true);
+  mix.forEach((s,i)=>wav.setInt16(44+i*2,Math.round(clamp(s,-1,1)*32767),true));
+  return URL.createObjectURL(new Blob([buffer],{type:'audio/wav'}));
+}
+let demoKind='orig',knownUrl='',harmonyNow=null,prevT=0;
+const wantKind=()=>trigger==='instruments'?'known':'orig';
+const demoLength=()=>demoKind==='known'?KNOWN_DURATION:duration;
+const demoLabel=()=>demoKind==='known'?'20-second known-parts demo':'18-second demo';
+const urlFor=kind=>kind==='known'?(knownUrl||=buildKnownDemo()):(demoUrl||=buildDemo());
+const isDemo=()=>!file;
+const progress=()=>clamp((audio.currentTime||0)/(isDemo()?demoLength():(audio.duration||duration)));
+/* Ink always builds a painting; the fade-with-music choice was removed from the controls */
+const effectiveMode=()=>'paint';
+const timelineDriven=()=>isDemo()&&(trigger==='instruments'||trigger==='harmony');
+
+/* Frames built from the demo's known events rather than from listening */
+function chordFrame(chords,t,prev){
+  const F={notes:[],chroma:new Float32Array(12),energy:.55,bass:.35,bright:.5,onset:false,flux:.1};
+  const c=[...chords].reverse().find(x=>t>=x.t)||chords[0];
+  const tones=[c.root,(c.root+(c.minor?3:4))%12,(c.root+7)%12],since=(t-c.t)%1.25;
+  tones.forEach((pc,i)=>F.notes.push({midi:c.pad.find(m=>m%12===pc)||c.pad[i],pc,s:[1,.8,.7][i]*(1-.25*since/1.25),v:clamp((c.minor?.52:.85)+(i?0:.1))}));
+  F.onset=Math.floor((t-c.t)/1.25)!==Math.floor((prev-c.t)/1.25)||prev<c.t;F.flux=F.onset?.5:.1;
+  harmonyNow={name:c.name,tones,minor:c.minor,how:'known'};
+  return F;
+}
+function instrumentFrame(t,prev){
+  const F={notes:[],chroma:new Float32Array(12),energy:.55,bass:.2,bright:.5,onset:false,flux:.1};
+  for(const p of Object.keys(PARTS)){
+    const e=EVENTS.filter(x=>x.part===p&&t>=x.t&&t<x.t+x.dur).sort((a,b)=>b.t-a.t)[0];
+    if(!e)continue;
+    const s=clamp(PARTS[p].gain*(1-.6*(t-e.t)/e.dur));
+    F.notes.push({midi:e.midi,pc:PARTS[p].pc,part:p,s,v:clamp(.5+.4*s)});
+  }
+  F.notes.sort((a,b)=>b.s-a.s);
+  const hit=EVENTS.filter(e=>e.t>prev&&e.t<=t);
+  F.onset=hit.length>0;F.flux=hit.length?.55:.1;
+  return F;
+}
+
+/* Harmony estimate for uploaded audio: match smoothed pitch-class strength against 24 major and minor triads */
+const TRIADS=[];
+for(let r=0;r<12;r++)for(const minor of [false,true]){
+  const v=new Float32Array(12);v[r]=1;v[(r+(minor?3:4))%12]=1;v[(r+7)%12]=1;
+  TRIADS.push({v,r,minor,name:NOTE[r]+(minor?'m':''),tones:[r,(r+(minor?3:4))%12,(r+7)%12]});
+}
+const est={acc:new Float32Array(12),cand:-1,count:0,now:null,last:''};
+function estimateReset(){est.acc.fill(0);est.cand=-1;est.count=0;est.now=null;est.last=''}
+function estimateChord(F){
+  const a=est.acc;let mag=0;
+  for(let i=0;i<12;i++){a[i]=a[i]*.92+F.chroma[i]*.08;mag+=a[i]*a[i]}
+  mag=Math.sqrt(mag);
+  if(mag<.12){est.now=null;est.cand=-1;est.count=0;return null}
+  let best=-1,bs=0,second=0;
+  TRIADS.forEach((t,i)=>{let d=0;for(let k=0;k<12;k++)d+=a[k]*t.v[k];const s=d/(mag*Math.sqrt(3));
+    if(s>bs){second=bs;bs=s;best=i}else if(s>second)second=s});
+  const sure=bs>.8&&bs-second>.05;        /* strong match, clearly ahead of the runner-up, held for a third of a second */
+  if(sure&&best===est.cand)est.count++;else{est.cand=sure?best:-1;est.count=sure?1:0}
+  if(est.count>=12)est.now={name:TRIADS[best].name,tones:TRIADS[best].tones,minor:TRIADS[best].minor,how:'estimate'};
+  return est.now;
+}
+
+/* Pitch colors run low to high: violet, blue, cyan, green, lime, yellow, orange, pink */
+const PITCH_HUES=[270,240,210,180,150,120,60,30,330];
+const pitchSlot=midi=>(((PITCH_HUES[Math.round((PITCH_HUES.length-1)*clamp((midi-40)/48))])/30)*7)%12;
+
+/* One frame of artwork information. With Notes selected this is exactly what the preferred page did. */
+function buildFrame(now){
+  const t=audio.currentTime||0;
+  let F;
+  harmonyNow=null;
+  if(timelineDriven()&&trigger==='instruments')F=instrumentFrame(t,prevT);
+  else if(timelineDriven())F=chordFrame(demoKind==='known'?KNOWN_CHORDS:ORIG_CHORDS,t,prevT);
+  else{
+    F=analyse(now);
+    if(trigger==='harmony'){
+      const c=estimateChord(F);
+      if(c){
+        harmonyNow=c;
+        F.notes=c.tones.map((pc,i)=>({midi:52+((pc-4+12)%12),pc,s:[1,.8,.7][i]*clamp(.55+F.energy),v:clamp((c.minor?.52:.85)+(i?0:.1))}));
+        F.onset=F.onset||c.name!==est.last;est.last=c.name;
+      }
+    }else if(trigger==='pitch')F.notes=F.notes.map(n=>({...n,pc:pitchSlot(n.midi)}));
+  }
+  if(trigger==='whole'){          /* the color journey: cyan, green, yellow, orange, red, purple, blue, pink over the song */
+    const K=[190,150,100,55,30,5,-25,-75,-105,-45],u=progress()*(K.length-1),i=Math.min(K.length-2,Math.floor(u)),base=K[i]+(K[i+1]-K[i])*(u-i);
+    F.notes=F.notes.map(n=>{const off=(((hueOf(n.pc)-180+540)%360)-180)*.1,h=((base+off)%360+360)%360;return {...n,pc:((Math.round(h/30)%12)*7)%12}});
+  }
+  prevT=t;
+  /* A chord can produce several clouds, but repeated octaves share the same color. */
+  F.notes=F.notes.filter((n,i,a)=>a.findIndex(o=>o.pc===n.pc)===i);
+  LAYOUT.prog=progress();
+  if(trigger==='pitch'){LAYOUT.x=LAYOUT.prog;LAYOUT.xs=.04;LAYOUT.band=.22;LAYOUT.size=1}
+  else if(trigger==='whole'){LAYOUT.x=.06+.88*LAYOUT.prog;LAYOUT.xs=.065;LAYOUT.band=1;LAYOUT.size=.80}
+  else{LAYOUT.x=null;LAYOUT.xs=.05;LAYOUT.band=1;LAYOUT.size=1}
+  return F;
+}
+
+function sourceInfo(){
+  const demo=isDemo();
+  switch(trigger){
+    case 'pitch':return {cls:'est',tag:'ESTIMATED',text:'Lower pitches land lower and higher pitches land higher, moving left to right as the song plays. Pitch is estimated from the sound.'};
+    case 'instruments':return demo
+      ?{cls:'demo',tag:'DEMO DATA',text:'This uses a separate 20-second demo whose bass, pad, pluck and bell parts are generated separately, so each instrument is known, not detected.'}
+      :{cls:'na',tag:'NOT AVAILABLE',text:'Instrument identification is not available for a mixed song file, so note colors are shown instead.'};
+    case 'harmony':return demo
+      ?{cls:'demo',tag:'DEMO DATA',text:'The demo is written on Am, F, C and G, so the chords are known. Palette follows the chord.'}
+      :{cls:'est',tag:'ESTIMATED',text:'Chords are guessed from the audio and named only when the match is strong. They can be wrong. When unsure, note colors are shown.'};
+    case 'whole':return {cls:'est',tag:'ESTIMATED',text:'One composition builds across the song, left to right, and earlier marks stay. The finished image is held and can be saved.'};
+    default:return null;
+  }
+}
+function renderSource(){
+  const el=$('source'),info=sourceInfo();
+  el.hidden=!info;
+  if(!info)return;
+  el.textContent='';
+  const b=document.createElement('span');b.className='badge '+info.cls;b.textContent=info.tag;
+  el.append(b,info.text);
+  if(trigger==='harmony'&&harmonyNow){}
+}
+function renderColorKey(chord=null){
+  const row=$('colorKey');
+  row.replaceChildren();
+  const swatch=(pc,name)=>{
+    const group=document.createElement('span'), dot=document.createElement('i');
+    group.className='sample';
+    dot.style.background='hsl('+hueOf(pc)+',95%,48%)';
+    dot.setAttribute('aria-hidden','true');
+    group.append(dot,name);
+    row.append(group);
+  };
+  const spectrum=(hues)=>{
+    const bar=document.createElement('span');
+    bar.className='spectrum';
+    bar.setAttribute('aria-hidden','true');
+    bar.style.background='linear-gradient(90deg,'+hues.map(h=>'hsl('+h+',92%,49%)').join(',')+')';
+    row.append(bar);
+  };
+  switch(trigger){
+    case 'notes':
+      row.append('Match colors to notes');
+      [[0,'C'],[7,'G'],[4,'E']].forEach(([pc,name])=>swatch(pc,name));
+      break;
+    case 'pitch':
+      row.append('Low');
+      spectrum(PITCH_HUES);
+      row.append('High');
+      break;
+    case 'instruments':
+      if(isDemo()){
+        for(const part of Object.values(PARTS))swatch(part.pc,part.label==='Bell melody'?'Bell':part.label);
+      }else row.append('Note colors · instruments unavailable');
+      break;
+    case 'harmony':
+      if(chord){
+        row.append((chord.how==='known'?'Demo chord ':'Estimated ')+chord.name+' ·');
+        chord.tones.forEach(pc=>swatch(pc,NOTE[pc]));
+      }else row.append('Colors follow the chord');
+      break;
+    case 'whole':
+      row.append('Start');
+      spectrum([190,150,100,55,30,5,335,285,255,315]);
+      row.append('End');
+  }
+}
+
+let shownChord='';
+function updateChordReadout(){
+  if(trigger!=='harmony')return;
+  const h=harmonyNow,key=h?h.name+h.how:'none';
+  if(key===shownChord)return;shownChord=key;
+  renderColorKey(h);
+  const el=$('source'),info=sourceInfo();
+  el.textContent='';
+  const b=document.createElement('span');b.className='badge '+info.cls;b.textContent=info.tag;
+  const L=$('legend');if(h){L.textContent='';for(const pc of h.tones)L.append(chip(pc,NOTE[pc]));L.append(h.name+(h.minor?' minor':' major'))}
+  else if(L&&!L.children.length)L.textContent='Chord colors appear when the music plays';
+  el.append(b,h?'Chord: '+h.name+' ('+h.tones.map(p=>NOTE[p]).join(' ')+') · '+(h.how==='known'?'known from the demo':'estimate, may be wrong'):info.text);
+}
+const LEAD={notes:'Each note has a color',pitch:'Higher pitch sits higher',instruments:'One color per instrument',harmony:'Chords shape the palette',whole:'A color journey across the song'};
+const DEFAULTS={notes:{style:'sh',mode:'fade'},pitch:{style:'sh',mode:'fade'},instruments:{style:'ink',mode:'paint'},harmony:{style:'wc',mode:'fade'},whole:{style:'wc',mode:'paint'}};
+const REFS={notes:'reference-notes.png',pitch:'02-pitch.png',instruments:'03-instruments.png',harmony:'04-harmony.png',whole:'reference-whole-song.png'};
+function chip(pc,label,row){
+  const c=document.createElement('div'),i=document.createElement('i');
+  c.className='chip'+(row?' row':'');i.style.background=paint(pc,1,1,false);c.append(i,label);return c;
+}
+function renderLegend(){
+  const L=$('legend');L.textContent='';L.className='';shownChord='';
+  renderColorKey();
+  if(trigger==='notes'){for(let k=0;k<12;k++){const pc=(k*7)%12;L.append(chip(pc,NOTE[pc]))}}
+  else if(trigger==='pitch'){
+    const bar=document.createElement('div');bar.id='gradbar';bar.style.background='linear-gradient(90deg,'+PITCH_HUES.map(h=>'hsl('+h+',85%,52%)').join(',')+')';
+    L.append('Low',bar,'High');L.style.alignItems='center';L.style.gap='10px';
+  }else if(trigger==='instruments'){
+    if(isDemo()){for(const p in PARTS)L.append(chip(PARTS[p].pc,PARTS[p].label,true));L.append('Demo parts, known not detected')}
+    else{L.textContent='Instrument identification is not available for song files.';L.classList.add('plain')}
+  }else if(trigger==='harmony'){L.id='legend';updateChordReadout()}
+  else{
+    const T=document.createElement('div');T.id='timeline';
+    T.innerHTML='<div class="axis"></div><div class="tick" style="left:33.3%"></div><div class="tick" style="left:66.6%"></div><div class="lab" style="left:16.6%">Beginning</div><div class="lab" style="left:50%">Middle</div><div class="lab" style="left:83.3%">Ending</div><div class="head" id="head"></div>';
+    L.append(T);L.classList.add('plain');L.style.width='100%';
+  }
+  $('foot').textContent=trigger==='whole'?'Generic sections, not detected song structure':'Local preview · '+(isDemo()?'demo audio':'your file');
+}
+$('seek').addEventListener('input',()=>{const dur=isDemo()?demoLength():(audio.duration||0);if(dur){audio.currentTime=dur*$('seek').value/1000;prevT=audio.currentTime}});
+function downloadCanvas(name){
+  cv.toBlob(blob=>{
+    if(!blob)return;
+    const link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download=name;link.click();
+    setTimeout(()=>URL.revokeObjectURL(link.href),1000);
+  });
+}
+
+let mode = 'fade';
+let style = 'sh';
+let R = INK;
+/* watercolor and the ink painting mode keep everything and end as a still image; the others let go of old marks */
+const keeps = () => style === 'wc' || trigger === 'whole' || (style === 'ink' && mode === 'paint');
+let file = null;
+let fileUrl = '';
+let demoUrl = '';
+let complete = false;
+let started = false;
+let fading = false;
+let starting = false;
+let output = null;
+const description = $('description');
+const play = $('play');
+const save = $('save');
+const say = message => { $('status').textContent = message; };
+const duration = 18;
+
+function buildDemo() {
+  const rate = 22050;
+  const samples = new Float32Array(rate * duration);
+  const chords = [[57,60,64,69],[53,57,60,65],[48,55,64,67],[55,59,62,71]];
+  // Separate attacks, a quiet gap, then overlapping notes to show both ink behaviors.
+  for (const [section, chord] of chords.entries()) {
+    for (const [voice, midi] of chord.entries()) {
+      const offset = Math.round(rate * (section * 4.25 + voice * (section < 2 ? .48 : .21)));
+      const length = Math.round(rate * (section === 0 ? 1.4 : 2.9));
+      const frequency = 440 * 2 ** ((midi - 69) / 12);
+      for (let i = 0; i < length && offset + i < samples.length; i++) {
+        const progress = i / length;
+        const envelope = Math.min(1, i / (rate * .028)) * (1 - progress) ** 1.8;
+        const phase = 2 * Math.PI * frequency * i / rate;
+        samples[offset + i] += envelope * (.16 * Math.sin(phase) + .038 * Math.sin(phase * 2));
+      }
+    }
+  }
+  const buffer = new ArrayBuffer(44 + samples.length * 2);
+  const wav = new DataView(buffer);
+  for (const [offset, word] of [[0,'RIFF'],[8,'WAVE'],[12,'fmt '],[36,'data']]) {
+    [...word].forEach((char, index) => wav.setUint8(offset + index, char.charCodeAt(0)));
+  }
+  wav.setUint32(4, buffer.byteLength - 8, true);
+  wav.setUint32(16, 16, true);
+  wav.setUint16(20, 1, true);
+  wav.setUint16(22, 1, true);
+  wav.setUint32(24, rate, true);
+  wav.setUint32(28, rate * 2, true);
+  wav.setUint16(32, 2, true);
+  wav.setUint16(34, 16, true);
+  wav.setUint32(40, samples.length * 2, true);
+  samples.forEach((sample, index) => wav.setInt16(44 + index * 2, Math.round(clamp(sample, -1, 1) * 32767), true));
+  return URL.createObjectURL(new Blob([buffer], {type:'audio/wav'}));
+}
+
+function sizeCanvas() {
+  const {width, height} = cv.getBoundingClientRect();
+  W = Math.max(1, width);
+  H = Math.max(1, height);
+  DPR = Math.min(devicePixelRatio || 1, 1.5);
+  cv.width = Math.round(W * DPR);
+  cv.height = Math.round(H * DPR);
+  g.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+
+function describe() {
+  description.textContent = complete ? 'Your painting is ready to save.' : LEAD[trigger];
+  $('subnote').textContent = complete ? '' : style === 'wc' ? 'Layered Watercolor: each note adds a wash. ' + WC_TEX.label()
+    : style === 'sh' ? 'Musical Shapes: forms arrive with each note, then recede.'
+    : style === 'glass' ? (GLASS.ok ? 'Glass Diamond: the stone turns with the music and takes its colors from it.' : 'Glass Diamond is not available in this browser.')
+    : 'Ink Clouds: clouds stay and layer into a painting.';
+}
+
+function syncUI() {
+  play.textContent = audio.paused
+    ? audio.ended ? 'Replay' : started ? 'Resume' : file ? 'Play song' : 'Play demo'
+    : 'Pause';
+  $('restart').hidden = !started;
+  $('demo').hidden = !file;
+  save.hidden = !complete;
+  const dur = isDemo() ? demoLength() : (audio.duration || 0), cur = audio.currentTime || 0;
+  const mmss = x => Math.floor(x / 60) + ':' + String(Math.floor(x % 60)).padStart(2, '0');
+  $('clock').textContent = mmss(cur) + (dur ? ' / ' + mmss(dur) : '');
+  if (document.activeElement !== $('seek')) $('seek').value = dur ? Math.round(1000 * cur / dur) : 0;
+  const head = $('head'); if (head) head.style.left = (dur ? 100 * cur / dur : 0) + '%';
+}
+
+function reset() {
+  audio.pause();
+  if (audio.readyState) audio.currentTime = 0;
+  complete = started = fading = false;
+  prevB?.fill(0);
+  fluxAvg = lastOn = 0;
+  INK.seed = 7;
+  /* each trigger may need the known-parts demo; the default Notes view keeps the preferred 18-second demo */
+  if (!file && demoKind !== wantKind()) {
+    demoKind = wantKind();
+    if (audio.getAttribute('src')) audio.src = urlFor(demoKind);
+    $('track').textContent = $('track').title = demoLabel();
+  }
+  prevT = 0;
+  estimateReset();
+  shownChord = '';
+  LAYOUT.hold = trigger === 'whole';
+  LAYOUT.tight = trigger === 'whole' && style === 'wc';
+  LAYOUT.x = null; LAYOUT.xs = .05; LAYOUT.band = 1; LAYOUT.size = 1;
+  INK.pigmentKeep = effectiveMode() === 'paint' ? 1 : .99;
+  INK_GL.look.fade = effectiveMode() === 'paint' ? 1 : .9988;
+  INK_GL.look.erode = effectiveMode() === 'paint' ? 0 : .0004;
+  R = style === 'wc' ? WC : style === 'sh' ? SH : style === 'glass' ? GLASS : INK;
+  $('styleSel').value = style;
+  renderSource();
+  renderLegend();
+  R.init();
+  describe();
+  syncUI();
+}
+
+function selectFile(nextFile) {
+  const oldFileUrl = fileUrl;
+  file = nextFile;
+  fileUrl = file ? URL.createObjectURL(file) : '';
+  if (fileUrl) audio.src = fileUrl;
+  else {
+    audio.removeAttribute('src');
+    audio.load();
+  }
+  if (oldFileUrl) URL.revokeObjectURL(oldFileUrl);
+  reset();
+  $('track').textContent = file ? file.name : demoLabel();
+  $('track').title = $('track').textContent;
+}
+
+async function togglePlayback() {
+  if (!audio.paused) {
+    audio.pause();
+    return;
+  }
+  if (starting) return;
+  starting = true;
+  play.disabled = true;
+  try {
+    if (audio.ended) reset();
+    if (!audio.getAttribute('src')) {
+      audio.src = urlFor(demoKind);
+    }
+    ensureAC();
+    if (!elSrc) {
+      elSrc = AC.createMediaElementSource(audio);
+      output = AC.createGain();
+      output.gain.value = Number($('mute').getAttribute('aria-pressed') === 'false');
+      elSrc.connect(analyser);
+      elSrc.connect(output);
+      output.connect(AC.destination);
+    }
+    await audio.play();
+    started = true;
+  } catch (error) {
+    if (error.name !== 'AbortError') {
+      description.textContent = 'This audio could not play. Try the demo or an MP3 or WAV file.';
+      say(description.textContent);
+    }
+  } finally {
+    starting = false;
+    play.disabled = false;
+    syncUI();
+  }
+}
+
+/* until the visitor picks a style, each trigger opens in its suggested style; once they pick one, it stays */
+let styleChosen = false;
+/* restart the music after a change; if a restart is already under way, wait for it rather than giving up */
+const resume = () => { if (starting) setTimeout(resume, 60); else if (audio.paused) togglePlayback(); };
+$('styleSel').addEventListener('change', () => {
+  const wasPlaying = !audio.paused;
+  style = $('styleSel').value; styleChosen = true;
+  reset();
+  if (wasPlaying) resume();
+  say('Style changed. The same track ' + (wasPlaying ? 'is playing again from the beginning.' : 'is ready to play from the beginning.'));
+});
+document.querySelectorAll('input[name=trigger]').forEach(input => {
+  input.addEventListener('change', () => {
+    const wasPlaying = !audio.paused;
+    trigger = input.value;
+    if (!styleChosen) style = DEFAULTS[trigger].style;   /* each trigger opens in the style that shows it best, unless one was picked by hand */
+    mode = DEFAULTS[trigger].mode;
+    reset();
+    /* if music was playing, keep it going (from the start, since the picture starts over) */
+    if (wasPlaying) resume();
+    say(TRIGGER_NAMES[trigger] + ' selected. The track is ready to play from the beginning.');
+  });
+});
+$('snapshot').addEventListener('click', () => {
+  const t = Math.floor(audio.currentTime || 0);
+  downloadCanvas('the-sound-of-color-snapshot-' + style + '-' + trigger + '-' + Math.floor(t / 60) + 'm' + String(t % 60).padStart(2, '0') + 's.png');
+  say('Snapshot saved. The music keeps playing.');
+});
+$('choose').addEventListener('click', () => $('file').click());
+$('file').addEventListener('change', event => {
+  const [nextFile] = event.target.files;
+  if (nextFile) selectFile(nextFile);
+  event.target.value = '';
+});
+$('demo').addEventListener('click', () => selectFile(null));
+$('mute').addEventListener('click', event => {
+  const button = event.currentTarget;
+  const muted = button.getAttribute('aria-pressed') === 'false';
+  button.setAttribute('aria-pressed', String(muted));
+  if (output) output.gain.value = muted ? 0 : 1;
+});
+play.addEventListener('click', togglePlayback);
+$('restart').addEventListener('click', () => { reset(); togglePlayback(); });
+for (const event of ['play','pause','timeupdate']) audio.addEventListener(event, syncUI);
+audio.addEventListener('ended', () => {
+  complete = keeps();
+  fading = !complete;
+  if (fading) INK_GL.look.fade = .9925;
+  describe();
+  syncUI();
+  say(complete ? 'Painting complete. Save it as an image.' : 'The song has ended.');
+});
+save.addEventListener('click', () => {
+  cv.toBlob(blob => {
+    if (!blob) return;
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'the-sound-of-color-painting.png';
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  });
+});
+
+let resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    const still = complete || style === 'wc' ? document.createElement('canvas') : null;
+    if (still) {
+      still.width = cv.width;
+      still.height = cv.height;
+      still.getContext('2d').drawImage(cv, 0, 0);
+    }
+    sizeCanvas();
+    if (still) g.drawImage(still, 0, 0, W, H);
+    else R.resize();
+    if (welcoming()) backdrop();
+  }, 120);
+});
+
+let lastFrame = 0;
+function loop(now) {
+  requestAnimationFrame(loop);
+  const interval = 1000 / (R.fps || 36);
+  if (now - lastFrame < interval - 1 || complete || (audio.paused && !fading)) return;
+  lastFrame = now - (now - lastFrame) % interval;
+  if (!audio.paused && analyser) {
+    // A chord can produce several clouds, but repeated octaves share the same color (done inside buildFrame).
+    const frame = buildFrame(now);
+    R.frame(frame);
+    updateChordReadout();
+  }
+  R.step(1 / 36);
+  if (fading && R.idle()) {
+    fading = false;
+    R.init();
+  }
+}
+/* local experiment only: lets a tester adjust the look from the browser console */
+window.__inkLab = {HOME_TEST: (im) => { HOME.wide = im; backdrop(); }, GLASS, WC_TEX, INK, WC, SH, LAYOUT, pitchSlot, chordFrame, instrumentFrame, ORIG_CHORDS, KNOWN_CHORDS, estimateChord, estimateReset, state: () => ({style, trigger, mode, complete, demoKind}) };
+/* optional second direction for review: add ?look=glaze for thinner, see-through ink that mixes where clouds overlap */
+if (/[?&]look=glaze\b/.test(location.search)) Object.assign(INK_GL.look, {dense:1.5, pale:.5, crease:.5, broad:.06});
+/* when the texture files arrive, repaint the empty paper and update the note, unless a song is already painting */
+/* ---------- controls stay out of the artwork ----------
+   While music plays, the controls fade out after 2.5 seconds without movement and come back when the pointer moves.
+   Hide controls (or H, or a tap on the artwork) clears them at any time, including over a finished painting; a tap
+   or any key brings them back. Keyboard focus inside the controls always keeps them visible. */
+let calmTimer = 0, calmBy = '';
+const controlsHot = () => !!document.querySelector('.top :focus-visible, .dock :focus-visible, .top:hover, .dock:hover, select:focus');
+function calm(by) { document.body.classList.add('calm'); calmBy = by; clearTimeout(calmTimer); }
+function wake(fromMove) {
+  if (fromMove && calmBy === 'manual') return;
+  if (document.body.classList.contains('calm')) { document.body.classList.remove('calm'); calmBy = ''; }
+  clearTimeout(calmTimer);
+  if (!audio.paused) calmTimer = setTimeout(() => { if (!audio.paused && !controlsHot()) calm('auto'); else wake(); }, 2500);
+}
+window.addEventListener('pointermove', () => wake(true), {passive: true});
+window.addEventListener('focusin', () => wake());
+window.addEventListener('keydown', event => {
+  if (/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName) || event.metaKey || event.ctrlKey || event.altKey) { wake(); return; }
+  const k = event.key.toLowerCase();
+  if (welcoming()) return;
+  if (k === 'h') { document.body.classList.contains('calm') ? wake() : calm('manual'); return; }
+  if (k === 'f') { $('fs').click(); return; }
+  wake();
+});
+$('main').addEventListener('pointerdown', event => {
+  if (event.button !== 0 || welcoming()) return;
+  document.body.classList.contains('calm') ? wake() : calm('manual');
+});
+$('hide').addEventListener('click', () => calm('manual'));
+audio.addEventListener('play', () => wake());
+for (const e of ['pause', 'ended']) audio.addEventListener(e, () => { if (calmBy === 'auto') wake(); clearTimeout(calmTimer); });
+$('fs').addEventListener('click', () => {
+  if (document.fullscreenElement) { document.exitFullscreen(); return; }
+  const req = document.documentElement.requestFullscreen ? document.documentElement.requestFullscreen() : Promise.reject();
+  req.catch(() => say('Full screen is blocked in this view. Open the page in its own browser tab.'));
+});
+document.addEventListener('fullscreenchange', () => { $('fs').textContent = document.fullscreenElement ? 'Exit full screen' : 'Full screen'; });
+
+/* ---------- welcome screen ----------
+   Behind the title sits one painting generated by Codex (see design-previews/home-image-brief.md), stretched to
+   cover the screen. Until those files exist, plain paper with a faint glow of colour at the edges. Nothing is
+   drawn from the music here and no sound is made; pressing Play clears it and the real song paints. */
+const welcoming = () => document.body.classList.contains('welcoming');
+const HOME = { wide: null, tall: null };
+for (const k of ['wide', 'tall']) {
+  const im = new Image();
+  im.onload = () => { HOME[k] = im; backdrop(); };
+  im.src = '../../assets/home/home-' + k + '.jpg';
+}
+function backdrop() {
+  if (!welcoming()) return;
+  g.globalCompositeOperation = 'source-over';
+  g.fillStyle = '#faf8f5'; g.fillRect(0, 0, W, H);
+  const im = (H > W && HOME.tall) || HOME.wide || HOME.tall;
+  if (im) {
+    /* cover the screen without stretching, centred */
+    const k = Math.max(W / im.naturalWidth, H / im.naturalHeight), w = im.naturalWidth * k, h = im.naturalHeight * k;
+    g.drawImage(im, (W - w) / 2, (H - h) / 2, w, h);
+    return;
+  }
+  const glow = (x, y, r, c) => { const rg = g.createRadialGradient(x, y, 0, x, y, r); rg.addColorStop(0, c); rg.addColorStop(1, 'rgba(250,248,245,0)'); g.fillStyle = rg; g.fillRect(0, 0, W, H); };
+  const M = Math.max(W, H);
+  glow(0, 0, M * .45, 'rgba(64,190,232,.16)'); glow(W, 0, M * .45, 'rgba(255,150,60,.13)');
+  glow(W, H, M * .45, 'rgba(170,80,220,.14)'); glow(0, H, M * .45, 'rgba(90,200,110,.13)');
+}
+function syncWelcome() {
+  document.querySelectorAll('#wtrig button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.t === trigger)));
+  document.querySelectorAll('#wstyle button').forEach(b => {
+    b.setAttribute('aria-pressed', String(b.dataset.s === style));
+    b.toggleAttribute('data-suggested', b.dataset.s === DEFAULTS[trigger].style);
+  });
+  $('wplaylabel').textContent = file ? 'Play your song' : 'Play the demo';
+  $('wsub').textContent = file ? file.name + ' · sound starts only when you press Play.' : 'Sound starts only when you press Play.';
+}
+function leaveWelcome() { document.body.classList.remove('welcoming'); wake(); }
+document.querySelectorAll('#wtrig button').forEach(b => b.addEventListener('click', () => {
+  const input = document.querySelector('input[name=trigger][value="' + b.dataset.t + '"]');
+  if (input && !input.checked) { input.checked = true; input.dispatchEvent(new Event('change')); }
+  syncWelcome(); backdrop();
+}));
+/* any style can be chosen for any trigger, and the choice stays when the trigger changes */
+document.querySelectorAll('#wstyle button').forEach(b => b.addEventListener('click', () => {
+  $('styleSel').value = b.dataset.s; $('styleSel').dispatchEvent(new Event('change'));
+  syncWelcome(); backdrop();
+}));
+$('wplay').addEventListener('click', () => { leaveWelcome(); reset(); togglePlayback(); });
+$('wchoose').addEventListener('click', () => $('file').click());
+$('file').addEventListener('change', () => { if (welcoming()) { syncWelcome(); backdrop(); } });
+
+/* the More menu: opens above its button, closes on any choice, outside click or Escape */
+const menu = $('moremenu'), morebtn = $('morebtn');
+const setMenu = open => { menu.hidden = !open; morebtn.setAttribute('aria-expanded', String(open)); };
+morebtn.addEventListener('click', e => { e.stopPropagation(); setMenu(menu.hidden); });
+menu.addEventListener('click', e => { if (e.target.closest('button')) setMenu(false); });
+document.addEventListener('pointerdown', e => { if (!menu.hidden && !e.target.closest('.more')) setMenu(false); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !menu.hidden) { setMenu(false); morebtn.focus(); } });
+const calmMenu = calm; calm = by => { setMenu(false); calmMenu(by); };
+
+window.__wcTexReady = () => { if (welcoming()) backdrop(); else if (style === 'wc' && !started) R.init(); describe(); };
+if (WC_TEX.state !== 'loading') window.__wcTexReady();
+sizeCanvas();
+reset();
+syncWelcome();
+backdrop();
+requestAnimationFrame(loop);
+})();
+</script>
+</html>

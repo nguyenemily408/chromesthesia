@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Sound of Color · Diamond mockups</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap">
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font:15px/1.45 "Instrument Sans",system-ui,sans-serif;background:#efeae2;color:#1d1424;padding:20px}
+  h1{font:normal 2rem/1.1 "Instrument Serif",Georgia,serif;margin:0 0 4px}
+  .sub{margin:0 0 16px;color:#5d5463;font-size:.9rem}
+  .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:18px}
+  figure{margin:0;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 6px 24px rgba(37,22,48,.1)}
+  canvas{display:block;width:100%;aspect-ratio:4/3}
+  figcaption{padding:14px 18px 18px}
+  figcaption b{font:normal 1.5rem/1.1 "Instrument Serif",Georgia,serif;display:block;margin-bottom:6px}
+  figcaption span{color:#5d5463;font-size:.9rem}
+  .tag{display:inline-block;font-size:.72rem;font-weight:600;letter-spacing:.06em;background:#ffe9b8;color:#6a4300;border-radius:6px;padding:1px 7px;margin-bottom:8px}
+</style>
+<h1>Two directions for the diamond</h1>
+<p class="sub">Still pictures drawn to show the idea. They are not the working diamond, and the built versions will differ in detail.</p>
+<div class="row">
+  <figure>
+    <canvas id="a" width="1200" height="900" role="img" aria-label="Mockup: a realistic glass diamond on a dark surface with rainbow light inside and colored light patches on the floor"></canvas>
+    <figcaption><span class="tag">MOCKUP</span><b>1 · Realistic glass</b>
+      <span>Light bends inside the stone and splits into the song's colours. Many small bright and dark reflections, sharp white glints, and patches of coloured light on the floor. The most beautiful, the hardest to read as music.</span></figcaption>
+  </figure>
+  <figure>
+    <canvas id="b" width="1200" height="900" role="img" aria-label="Mockup: a twelve-sided diamond seen from above, each side labeled with a note and its color, with C, E and G lit"></canvas>
+    <figcaption><span class="tag">MOCKUP</span><b>2 · Twelve-note cut</b>
+      <span>Seen from above, the stone has twelve sides, one per note. A side glows only while its note sounds. Shown here: a C major chord lights C, E and G. The easiest to read as music, less like a real gem.</span></figcaption>
+  </figure>
+</div>
+<script>
+(() => {
+let seed = 11;
+const rand = () => { let t = seed += 0x6D2B79F5; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+const r = (a, b) => a + rand() * (b - a);
+const NOTE = ['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
+const hueOf = pc => ((pc * 7) % 12) * 30;
+
+/* ---------- 1 · realistic glass ---------- */
+{
+  const cv = document.getElementById('a'), g = cv.getContext('2d'), W = cv.width, H = cv.height;
+  const bg = g.createRadialGradient(W * .5, H * .42, 0, W * .5, H * .5, W * .75);
+  bg.addColorStop(0, '#2a2636'); bg.addColorStop(1, '#07060a');
+  g.fillStyle = bg; g.fillRect(0, 0, W, H);
+  /* floor */
+  const fl = g.createLinearGradient(0, H * .62, 0, H);
+  fl.addColorStop(0, 'rgba(255,255,255,.07)'); fl.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = fl; g.fillRect(0, H * .66, W, H * .34);
+
+  const V = [], F = [];
+  const ring = (rad, y, n, off) => { const s = V.length; for (let i = 0; i < n; i++) { const a = (i + off) / n * Math.PI * 2; V.push([Math.cos(a) * rad, y, Math.sin(a) * rad]); } return s; };
+  const T = ring(.56, .36, 8, 0), S = ring(.8, .2, 8, .5), G = ring(1, 0, 16, 0), L = ring(.47, -.5, 8, .5), C = V.length; V.push([0, -.86, 0]);
+  const m8 = i => (i + 8) % 8, m16 = i => (i + 16) % 16;
+  F.push([0,1,2,3,4,5,6,7].map(i => T + i));
+  for (let i = 0; i < 8; i++) {
+    F.push([T + i, T + m8(i + 1), S + i], [T + i, S + i, G + 2 * i, S + m8(i - 1)],
+      [S + i, G + m16(2 * i + 1), G + 2 * i], [S + i, G + m16(2 * i + 2), G + m16(2 * i + 1)],
+      [C, L + m8(i - 1), G + 2 * i, L + i], [L + i, G + 2 * i, G + m16(2 * i + 1)], [L + i, G + m16(2 * i + 1), G + m16(2 * i + 2)]);
+  }
+  const spin = .35, tilt = -.55, R = H * .36, ox = W * .5, oy = H * .43;
+  const cy = Math.cos(spin), sy = Math.sin(spin), cx = Math.cos(tilt), sx = Math.sin(tilt);
+  const P = V.map(v => { const x = v[0] * cy + v[2] * sy, z0 = -v[0] * sy + v[2] * cy, y = (v[1] + .2) * cx - z0 * sx, z = (v[1] + .2) * sx + z0 * cx, k = 3.6 / (3.6 - z); return [ox + x * R * k, oy - y * R * k, z]; });
+  const live = [0, 4, 7, 9, 2];   /* the notes "sounding" in this picture */
+
+  /* coloured light thrown onto the floor */
+  g.globalCompositeOperation = 'screen';
+  for (let i = 0; i < 16; i++) {
+    const a = r(.15, Math.PI - .15), d = r(R * .9, R * 2.1), x = ox + Math.cos(a) * d * 1.25 * (rand() < .5 ? 1 : -1) * .9, y = H * .8 + Math.sin(a) * R * .22 + r(-20, 30);
+    const w = r(50, 150), h = r(10, 26), hue = hueOf(live[i % live.length]);
+    const pg = g.createRadialGradient(x, y, 0, x, y, w);
+    pg.addColorStop(0, 'hsla(' + hue + ',95%,62%,.5)'); pg.addColorStop(.5, 'hsla(' + ((hue + 30) % 360) + ',95%,60%,.18)'); pg.addColorStop(1, 'hsla(' + hue + ',95%,60%,0)');
+    g.save(); g.translate(x, y); g.rotate(r(-.5, .5)); g.scale(1, h / w); g.translate(-x, -y);
+    g.fillStyle = pg; g.beginPath(); g.arc(x, y, w, 0, 6.2832); g.fill(); g.restore();
+  }
+  /* soft shadow under the stone */
+  g.globalCompositeOperation = 'source-over';
+  const sh = g.createRadialGradient(ox, H * .79, 0, ox, H * .79, R * .9);
+  sh.addColorStop(0, 'rgba(0,0,0,.55)'); sh.addColorStop(1, 'rgba(0,0,0,0)');
+  g.save(); g.translate(ox, H * .79); g.scale(1, .16); g.translate(-ox, -H * .79); g.fillStyle = sh; g.beginPath(); g.arc(ox, H * .79, R * .9, 0, 6.2832); g.fill(); g.restore();
+
+  const list = F.map(f => ({ f, z: f.reduce((s, i) => s + P[i][2], 0) / f.length })).sort((a, b) => a.z - b.z);
+  for (const o of list) {
+    const pts = o.f.map(i => P[i]);
+    const path = () => { g.beginPath(); pts.forEach(p => g.lineTo(p[0], p[1])); g.closePath(); };
+    let minx = 1e9, maxx = -1e9, miny = 1e9, maxy = -1e9; pts.forEach(p => { minx = Math.min(minx, p[0]); maxx = Math.max(maxx, p[0]); miny = Math.min(miny, p[1]); maxy = Math.max(maxy, p[1]); });
+    g.save(); path(); g.clip();
+    /* base glass */
+    g.globalCompositeOperation = 'source-over';
+    const base = g.createLinearGradient(minx, miny, maxx, maxy), l = r(8, 46);
+    base.addColorStop(0, 'hsla(225,25%,' + (l + 22) + '%,.82)'); base.addColorStop(1, 'hsla(235,35%,' + l + '%,.82)');
+    g.fillStyle = base; g.fillRect(minx, miny, maxx - minx, maxy - miny);
+    /* the inside of a diamond: many small mirrored shards, some dark, some white, some rainbow */
+    const n = 5 + Math.floor((maxx - minx) * (maxy - miny) / 5200);
+    for (let k = 0; k < n; k++) {
+      const x = r(minx, maxx), y = r(miny, maxy), s = r(18, 90), a = r(0, 6.28), kind = rand();
+      g.beginPath(); g.moveTo(x + Math.cos(a) * s, y + Math.sin(a) * s); g.lineTo(x + Math.cos(a + 2.2) * s * r(.3, 1), y + Math.sin(a + 2.2) * s * r(.3, 1)); g.lineTo(x + Math.cos(a + 4.1) * s * r(.3, 1), y + Math.sin(a + 4.1) * s * r(.3, 1)); g.closePath();
+      if (kind < .3) { g.globalCompositeOperation = 'source-over'; g.fillStyle = 'rgba(6,6,14,' + r(.35, .75).toFixed(2) + ')'; }
+      else if (kind < .5) { g.globalCompositeOperation = 'screen'; g.fillStyle = 'rgba(255,255,255,' + r(.25, .8).toFixed(2) + ')'; }
+      else { g.globalCompositeOperation = 'screen'; const hue = hueOf(live[Math.floor(rand() * live.length)]), sp = g.createLinearGradient(x - s, y - s, x + s, y + s);
+        sp.addColorStop(0, 'hsla(' + ((hue + 320) % 360) + ',100%,60%,.85)'); sp.addColorStop(.5, 'hsla(' + hue + ',100%,62%,.9)'); sp.addColorStop(1, 'hsla(' + ((hue + 45) % 360) + ',100%,64%,.85)'); g.fillStyle = sp; }
+      g.fill();
+    }
+    g.restore();
+    g.globalCompositeOperation = 'source-over'; path(); g.lineWidth = 1.4; g.strokeStyle = 'rgba(240,240,255,.28)'; g.stroke();
+  }
+  /* incoming white beam and star glints */
+  g.globalCompositeOperation = 'screen';
+  const beam = g.createLinearGradient(W * .05, 0, ox - R * .2, oy - R * .3);
+  beam.addColorStop(0, 'rgba(255,255,255,0)'); beam.addColorStop(1, 'rgba(255,255,255,.28)');
+  g.fillStyle = beam; g.beginPath(); g.moveTo(W * .02, 0); g.lineTo(W * .2, 0); g.lineTo(ox + R * .25, oy - R * .42); g.lineTo(ox - R * .55, oy - R * .2); g.closePath(); g.fill();
+  for (const [x, y, s] of [[ox - R * .3, oy - R * .36, 70], [ox + R * .52, oy - R * .17, 46], [ox + R * .05, oy + R * .2, 34], [ox - R * .62, oy - R * .08, 30]]) {
+    g.fillStyle = 'rgba(255,255,255,.95)'; g.beginPath();
+    for (let i = 0; i < 8; i++) { const a = i / 8 * 6.2832, rr = i % 2 ? s * .07 : s; g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); } g.closePath(); g.fill();
+    const gl = g.createRadialGradient(x, y, 0, x, y, s * .8); gl.addColorStop(0, 'rgba(255,255,255,.6)'); gl.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gl; g.beginPath(); g.arc(x, y, s * .8, 0, 6.2832); g.fill();
+  }
+  g.globalCompositeOperation = 'source-over';
+}
+
+/* ---------- 2 · twelve-note cut, seen from above ---------- */
+{
+  const cv = document.getElementById('b'), g = cv.getContext('2d'), W = cv.width, H = cv.height, ox = W / 2, oy = H * .5;
+  const bg = g.createRadialGradient(ox, oy, 0, ox, oy, W * .7); bg.addColorStop(0, '#ffffff'); bg.addColorStop(1, '#e9e4dc');
+  g.fillStyle = bg; g.fillRect(0, 0, W, H);
+  const lit = { 0: 1, 4: .85, 7: .9 };              /* C major */
+  const Rg = H * .37, Rc = Rg * .76, Rt = Rg * .48;
+  const pt = (rad, k) => { const a = k / 12 * Math.PI * 2 - Math.PI / 2; return [ox + Math.cos(a) * rad, oy + Math.sin(a) * rad]; };
+  /* glow behind lit sides */
+  for (let i = 0; i < 12; i++) { const pc = (i * 7) % 12, on = lit[pc]; if (!on) continue;
+    const [x, y] = pt(Rg * 1.02, i), gl = g.createRadialGradient(x, y, 0, x, y, Rg * .6);
+    gl.addColorStop(0, 'hsla(' + hueOf(pc) + ',95%,58%,' + (.5 * on) + ')'); gl.addColorStop(1, 'hsla(' + hueOf(pc) + ',95%,58%,0)');
+    g.fillStyle = gl; g.beginPath(); g.arc(x, y, Rg * .6, 0, 6.2832); g.fill(); }
+  for (let i = 0; i < 12; i++) {
+    const pc = (i * 7) % 12, on = lit[pc] || 0, hue = hueOf(pc);
+    const gA = pt(Rg, i - .5), gB = pt(Rg, i + .5), cM = pt(Rc, i), tA = pt(Rt, i - .5), tB = pt(Rt, i + .5);
+    const fill = (pts, light, alpha) => { g.beginPath(); pts.forEach(p => g.lineTo(p[0], p[1])); g.closePath();
+      g.fillStyle = on ? 'hsla(' + hue + ',92%,' + light + '%,' + alpha * (.55 + .45 * on) + ')' : 'hsla(' + hue + ',30%,' + (78 + (light - 55) * .25) + '%,.55)'; g.fill();
+      g.lineWidth = 1.5; g.strokeStyle = 'rgba(40,40,70,.28)'; g.stroke(); };
+    fill([tA, tB, cM], 66, .95);            /* star facet */
+    fill([tA, cM, gA], 52, .95);            /* crown halves */
+    fill([tB, gB, cM], 60, .95);
+    fill([gA, cM, gB], 46, .9);             /* girdle facet */
+    if (on) { const [x, y] = pt(Rc * .93, i); g.fillStyle = 'rgba(255,255,255,.9)'; g.beginPath();
+      for (let k = 0; k < 8; k++) { const a = k / 8 * 6.2832, rr = k % 2 ? 3 : 34 * on; g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); } g.closePath(); g.fill(); }
+    /* note label outside its side */
+    const [lx, ly] = pt(Rg * 1.17, i);
+    g.fillStyle = 'hsl(' + hue + ',85%,' + (on ? 48 : 62) + '%)'; g.beginPath(); g.arc(lx, ly, on ? 30 : 22, 0, 6.2832); g.fill();
+    g.fillStyle = '#fff'; g.font = (on ? '600 26px' : '500 20px') + ' "Instrument Sans",system-ui,sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(NOTE[pc], lx, ly + 1);
+  }
+  /* the table in the middle carries the blended chord colour */
+  g.beginPath(); for (let i = 0; i < 12; i++) { const p = pt(Rt, i + .5); g.lineTo(p[0], p[1]); } g.closePath();
+  const tg = g.createLinearGradient(ox - Rt, oy - Rt, ox + Rt, oy + Rt);
+  tg.addColorStop(0, 'hsla(' + hueOf(0) + ',85%,72%,.75)'); tg.addColorStop(.5, 'hsla(' + hueOf(7) + ',85%,74%,.7)'); tg.addColorStop(1, 'hsla(' + hueOf(4) + ',80%,70%,.75)');
+  g.fillStyle = tg; g.fill(); g.lineWidth = 1.5; g.strokeStyle = 'rgba(40,40,70,.3)'; g.stroke();
+  const hl = g.createLinearGradient(ox - Rt, oy - Rt, ox, oy); hl.addColorStop(0, 'rgba(255,255,255,.75)'); hl.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = hl; g.beginPath(); g.moveTo(...pt(Rt, 8.5)); g.lineTo(...pt(Rt, 9.5)); g.lineTo(...pt(Rt, 10.5)); g.lineTo(ox, oy); g.closePath(); g.fill();
+  g.fillStyle = '#1d1424'; g.font = '34px "Instrument Serif",Georgia,serif'; g.textAlign = 'center'; g.fillText('C major', ox, oy - 6);
+  g.font = '18px "Instrument Sans",system-ui,sans-serif'; g.fillStyle = 'rgba(29,20,36,.6)'; g.fillText('C · E · G sounding', ox, oy + 26);
+}
+})();
+</script>
+</html>

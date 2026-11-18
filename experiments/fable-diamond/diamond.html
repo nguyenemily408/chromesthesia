@@ -1,0 +1,437 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Sound of Color — Diamond</title>
+<style>
+  :root{--bar:56px;--ink:#26232b;--muted:#6d6874;--line:rgba(38,35,43,.12)}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;background:#f2f0ec;color:var(--ink);font:14px/1.3 system-ui,-apple-system,"Segoe UI",sans-serif}
+  canvas{position:fixed;inset:0;width:100vw;height:100vh;display:block}
+  #bar{position:fixed;left:0;right:0;bottom:0;height:var(--bar);display:flex;align-items:center;gap:12px;padding:0 16px;
+    background:rgba(250,249,247,.78);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1px solid var(--line);z-index:2}
+  #bar button{flex:0 0 auto;height:34px;border-radius:17px;border:1px solid var(--line);background:#fff;color:var(--ink);font:inherit;font-weight:600;cursor:pointer;padding:0 14px;white-space:nowrap}
+  #bar button:hover{background:#f6f4f1}
+  #bar button:focus-visible,#seek:focus-visible{outline:2px solid #6a5acd;outline-offset:2px}
+  #play{width:96px;background:var(--ink)!important;color:#fff!important;border-color:var(--ink)!important}
+  #seek{flex:1 1 auto;min-width:60px;accent-color:var(--ink)}
+  #clock{flex:0 0 92px;text-align:center;font-variant-numeric:tabular-nums;color:var(--muted)}
+  #track{flex:0 0 150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:12px}
+  #upload{width:118px}#snap{width:96px}
+  #msg{position:fixed;top:16px;left:50%;transform:translateX(-50%);padding:8px 14px;border-radius:16px;background:rgba(255,255,255,.85);
+    color:var(--ink);font-size:13px;pointer-events:none;opacity:0;transition:opacity .4s;z-index:3;max-width:calc(100vw - 32px);text-align:center}
+  #msg.on{opacity:1}
+  #mode{position:fixed;top:12px;left:12px;z-index:2;display:flex;align-items:center;gap:8px;padding:5px 6px 5px 12px;border-radius:18px;
+    background:rgba(250,249,247,.78);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--line);font-size:12px;color:var(--muted);max-width:calc(100vw - 24px);flex-wrap:wrap}
+  #mode .seg{display:flex;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  #mode .seg button{border:0;background:#fff;color:var(--ink);font:inherit;font-weight:600;padding:5px 10px;cursor:pointer}
+  #mode .seg button[aria-pressed=true]{background:var(--ink);color:#fff}
+  #mode .note{flex-basis:100%;padding-right:6px}
+  @media (max-width:640px){#bar{gap:8px;padding:0 12px}#bar button{padding:0 8px}#track{display:none}#clock{flex-basis:66px;font-size:12px}#play{width:64px}#upload{width:66px}#upload .long{display:none}#snap{width:78px}#seek{min-width:36px}}
+</style>
+</head>
+<body>
+<canvas id="cv" aria-label="A cut diamond whose facets light up in the colours of the music"></canvas>
+<div id="msg" role="status" aria-live="polite"></div>
+<div id="mode"><span>Driven by</span><span class="seg" role="group" aria-label="Trigger"><button type="button" data-m="notes" aria-pressed="true">Notes</button><button type="button" data-m="whole" aria-pressed="false">Whole Song</button></span>
+  <span class="note" id="modeNote">Each heard note lights its own wedge. Pitches are estimated from the sound.</span></div>
+<div id="bar">
+  <button type="button" id="play">Play</button>
+  <input type="range" id="seek" min="0" max="1000" value="0" aria-label="Seek">
+  <span id="clock">0:00 / 0:18</span>
+  <span id="track" title="18-second demo">18-second demo</span>
+  <button type="button" id="upload">Upload<span class="long"> song</span></button>
+  <button type="button" id="snap">Snapshot</button>
+  <input type="file" id="file" accept="audio/*" hidden>
+</div>
+<audio id="audio" preload="auto"></audio>
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const cv=$('cv'),audio=$('audio');
+const clamp=(x,a=0,b=1)=>Math.max(a,Math.min(b,x));
+const NOTE=['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
+/* same note colours as the main app: walk the circle of fifths so related notes sit side by side */
+const hueOf=pc=>((pc*7)%12)*30;
+function hsl(h,s,l){h/=360;const f=n=>{const k=(n+h*12)%12,a=s*Math.min(l,1-l);return l-a*Math.max(-1,Math.min(k-3,9-k,1))};return [f(0),f(8),f(4)]}
+const NOTE_RGB=Array.from({length:12},(_,pc)=>hsl(hueOf(pc),.92,.55));
+function vivid(n,F){return clamp(n.s*.55+F.bright*.35+F.energy*.25+(n.midi>72?.1:0)-(n.midi<50?.28:0))}
+
+/* ================= audio analysis (copied from experiments/fable-ink/three-styles-next.html) ================= */
+let AC=null,analyser=null,fbuf,bbuf,prevB,elSrc=null,output=null;
+let fluxAvg=0,lastOn=0;
+function ensureAC(){
+  if(!AC){
+    AC=new (window.AudioContext||window.webkitAudioContext)();
+    analyser=AC.createAnalyser();analyser.fftSize=8192;analyser.smoothingTimeConstant=.55;analyser.minDecibels=-100;analyser.maxDecibels=-10;
+    const mute=AC.createGain();mute.gain.value=0;analyser.connect(mute);mute.connect(AC.destination);
+    fbuf=new Float32Array(analyser.frequencyBinCount);bbuf=new Uint8Array(analyser.frequencyBinCount);prevB=new Uint8Array(analyser.frequencyBinCount);
+  }
+  if(AC.state==='suspended')AC.resume();
+}
+function analyse(now){
+  const F={notes:[],chroma:new Float32Array(12),energy:0,bass:0,bright:.5,onset:false,flux:0};
+  analyser.getFloatFrequencyData(fbuf);analyser.getByteFrequencyData(bbuf);
+  const hz=AC.sampleRate/analyser.fftSize,lo=Math.ceil(60/hz),hi=Math.min(fbuf.length-2,Math.floor(5000/hz)),top=Math.min(bbuf.length,Math.floor(9000/hz));
+  let flux=0,sum=0,bs=0,bn=0,cw=0;
+  for(let i=1;i<top;i++){const b=bbuf[i],d=b-prevB[i];if(d>0)flux+=d;prevB[i]=b;sum+=b;if(i*hz<160){bs+=b;bn++}cw+=b*Math.log2(i*hz)}
+  flux/=top*255;
+  let mx=-200;for(let i=lo;i<=hi;i++)if(fbuf[i]>mx)mx=fbuf[i];
+  F.energy=mx<-78?0:clamp(clamp((sum/(top*255)-.1)*2)*.5+clamp((mx+72)/50)*.6);
+  F.bass=clamp(bs/(bn*255)*1.25);
+  F.bright=sum?clamp((cw/sum-8.6)/2.6):.5;
+  if(flux>fluxAvg*1.6+.004&&now-lastOn>110&&F.energy>.05){F.onset=true;lastOn=now}
+  fluxAvg=fluxAvg*.93+flux*.07;
+  F.flux=clamp(flux*18);
+  if(mx<-78)return F;
+  const floor=mx-32,best=new Map();
+  for(let i=lo;i<=hi;i++){const v=fbuf[i];
+    if(v>floor&&v>fbuf[i-1]&&v>=fbuf[i+1]){const m=Math.round(69+12*Math.log2(i*hz/440)),s=(v-floor)/32;if(!(best.get(m)>=s))best.set(m,s)}}
+  let cm=0;
+  best.forEach((s,m)=>{F.notes.push({midi:m,pc:m%12,s,v:0});F.chroma[m%12]+=s;if(F.chroma[m%12]>cm)cm=F.chroma[m%12]});
+  if(cm)for(let i=0;i<12;i++)F.chroma[i]/=cm;
+  F.notes.sort((a,b)=>b.s-a.s);F.notes.length=Math.min(F.notes.length,6);
+  for(const n of F.notes)n.v=vivid(n,F);
+  return F;
+}
+
+/* ================= the 18-second demo (same builder as three-styles-next.html) ================= */
+const duration=18;
+function buildDemo(){
+  const rate=22050,samples=new Float32Array(rate*duration);
+  const chords=[[57,60,64,69],[53,57,60,65],[48,55,64,67],[55,59,62,71]];
+  for(const [section,chord] of chords.entries()){
+    for(const [voice,midi] of chord.entries()){
+      const offset=Math.round(rate*(section*4.25+voice*(section<2?.48:.21)));
+      const length=Math.round(rate*(section===0?1.4:2.9));
+      const frequency=440*2**((midi-69)/12);
+      for(let i=0;i<length&&offset+i<samples.length;i++){
+        const progress=i/length,envelope=Math.min(1,i/(rate*.028))*(1-progress)**1.8,phase=2*Math.PI*frequency*i/rate;
+        samples[offset+i]+=envelope*(.16*Math.sin(phase)+.038*Math.sin(phase*2));
+      }
+    }
+  }
+  const buffer=new ArrayBuffer(44+samples.length*2),wav=new DataView(buffer);
+  for(const [offset,word] of [[0,'RIFF'],[8,'WAVE'],[12,'fmt '],[36,'data']])[...word].forEach((c,i)=>wav.setUint8(offset+i,c.charCodeAt(0)));
+  wav.setUint32(4,buffer.byteLength-8,true);wav.setUint32(16,16,true);wav.setUint16(20,1,true);wav.setUint16(22,1,true);
+  wav.setUint32(24,rate,true);wav.setUint32(28,rate*2,true);wav.setUint16(32,2,true);wav.setUint16(34,16,true);wav.setUint32(40,samples.length*2,true);
+  samples.forEach((s,i)=>wav.setInt16(44+i*2,Math.round(clamp(s,-1,1)*32767),true));
+  return URL.createObjectURL(new Blob([buffer],{type:'audio/wav'}));
+}
+
+/* ================= the diamond: a 12-fold brilliant cut =================
+   Going round the stone like a clock face, each of the 12 wedges belongs to one note.
+   Neighbouring wedges are a fifth apart, so the colours go smoothly round the colour wheel.
+   Looking down through the flat table on top you see the wedges on the far side of the stone,
+   so the table shows all 12 note colours as a ring of slices. */
+const N=12,pcAt=i=>(((i%N)+N)%N*7)%12;
+function buildGem(){
+  const pt=(r,y,a)=>[Math.cos(a*2*Math.PI)*r,y,Math.sin(a*2*Math.PI)*r];
+  const T=[],S=[],Gt=[],Gb=[],R=[],C=[0,-.88,0];
+  for(let i=0;i<N;i++){T.push(pt(.56,.32,i/N));S.push(pt(.79,.17,(i+.5)/N));R.push(pt(.4,-.52,(i+.5)/N))}
+  for(let k=0;k<2*N;k++){Gt.push(pt(1,.025,k/(2*N)));Gb.push(pt(1,-.025,k/(2*N)))}
+  const g=k=>((k%(2*N))+2*N)%(2*N),w=i=>((i%N)+N)%N;
+  const faces=[];
+  faces.push({p:T.slice(),pc:-1,kind:0});                                          /* table */
+  for(let i=0;i<N;i++){const pc=pcAt(i);
+    faces.push({p:[T[i],S[i],T[w(i+1)]],pc,kind:1});                               /* star facet */
+    faces.push({p:[T[i],S[w(i-1)],Gt[2*i],S[i]],pc,kind:1});                       /* bezel (kite) */
+    faces.push({p:[S[i],Gt[2*i],Gt[g(2*i+1)]],pc,kind:1});                         /* upper girdle facets */
+    faces.push({p:[S[i],Gt[g(2*i+1)],Gt[g(2*i+2)]],pc,kind:1});
+    for(const k of [2*i,2*i+1])faces.push({p:[Gt[g(k)],Gt[g(k+1)],Gb[g(k+1)],Gb[g(k)]],pc,kind:2});   /* girdle */
+    faces.push({p:[Gb[g(2*i+1)],Gb[2*i],R[i]],pc,kind:3});                         /* lower girdle facets */
+    faces.push({p:[Gb[g(2*i+2)],Gb[g(2*i+1)],R[i]],pc,kind:3});
+    faces.push({p:[Gb[2*i],R[w(i-1)],C,R[i]],pc,kind:3});                          /* pavilion main (kite) */
+  }
+  /* flatten into triangles: position, flat normal, note, facet id, edge coordinates */
+  const out=[],cent=[];
+  faces.forEach((f,id)=>{
+    const p=f.p;let nx=0,ny=0,nz=0,cx=0,cy=0,cz=0;
+    for(let j=0;j<p.length;j++){const a=p[j],b=p[(j+1)%p.length];nx+=(a[1]-b[1])*(a[2]+b[2]);ny+=(a[2]-b[2])*(a[0]+b[0]);nz+=(a[0]-b[0])*(a[1]+b[1]);cx+=a[0];cy+=a[1];cz+=a[2]}
+    cx/=p.length;cy/=p.length;cz/=p.length;
+    let m=Math.hypot(nx,ny,nz)||1;nx/=m;ny/=m;nz/=m;
+    if(nx*cx+ny*cy+nz*cz<0){nx=-nx;ny=-ny;nz=-nz;p.reverse()}
+    cent.push(cx,cy,cz,nx,ny,nz,f.pc,id);
+    const last=p.length-1;
+    for(let j=1;j<last;j++){
+      const hideB=j+1!==last?1:0,hideC=j!==1?1:0;      /* hide the inner diagonals of facets with 4+ corners */
+      const bary=[[1,hideB,hideC],[0,1+hideB,hideC],[0,hideB,1+hideC]];
+      [p[0],p[j],p[j+1]].forEach((q,k)=>out.push(q[0],q[1],q[2],nx,ny,nz,f.pc,id,...bary[k]));
+    }
+  });
+  return {tri:new Float32Array(out),cent:new Float32Array(cent),faces:faces.length};
+}
+
+/* ================= WebGL ================= */
+const gl=cv.getContext('webgl',{antialias:true,preserveDrawingBuffer:true,alpha:false});
+function say(t,ms=2600){const m=$('msg');m.textContent=t;m.classList.add('on');clearTimeout(say.t);if(ms)say.t=setTimeout(()=>m.classList.remove('on'),ms)}
+if(!gl){say('This browser could not start WebGL, so the diamond cannot be drawn.',0);throw new Error('no webgl')}
+
+const BG_VS=`attribute vec2 p;varying vec2 uv;void main(){uv=p*.5+.5;gl_Position=vec4(p,0,1);}`;
+const BG_FS=`precision mediump float;varying vec2 uv;uniform vec2 uRes;uniform vec2 uGem;uniform float uScale;uniform vec3 uGlowCol;uniform float uGlow;
+void main(){
+  vec2 px=uv*uRes;
+  vec3 c=mix(vec3(.985,.98,.972),vec3(.925,.918,.91),smoothstep(.0,1.,length(uv-vec2(.5,.56))*1.25));
+  vec2 d=(px-uGem)/vec2(uScale*1.15,uScale*.24);
+  float e=exp(-dot(d,d)*1.6);
+  c*=1.-.10*e;                                             /* soft shadow pool on the floor */
+  vec2 d2=(px-uGem)/vec2(uScale*1.7,uScale*.5);
+  float e2=exp(-dot(d2,d2)*1.3);
+  c=mix(c,c*.55+uGlowCol*.55,clamp(uGlow*e2,0.,.85));     /* bass glow underneath */
+  gl_FragColor=vec4(c,1);
+}`;
+const GEM_VS=`attribute vec3 aP;attribute vec3 aN;attribute float aPc;attribute float aId;attribute vec3 aB;
+uniform mat4 uM;uniform mat4 uVP;varying vec3 vN;varying vec3 vW;varying float vPc;varying float vId;varying vec3 vB;varying vec3 vM;
+void main(){vec4 w=uM*vec4(aP,1);vW=w.xyz;vN=mat3(uM)*aN;vPc=aPc;vId=aId;vB=aB;vM=aP;gl_Position=uVP*w;}`;
+const GEM_FS=`precision highp float;
+varying vec3 vN;varying vec3 vW;varying float vPc;varying float vId;varying vec3 vB;varying vec3 vM;
+uniform mat4 uM;uniform vec3 uEye;uniform float uLev[12];uniform vec3 uCol[12];
+uniform float uSpark;uniform float uSeed;uniform float uSparkFrac;uniform float uTime;uniform float uDpr;
+float h1(float x){return fract(sin(x*127.1+uSeed*.0)*43758.5453);}
+vec3 h3(float x){return fract(sin(vec3(x*127.1,x*311.7,x*74.7))*43758.5453);}
+/* a cheap photo-studio surrounding: bright ceiling and strip lights, a dark floor and a dark camera in front.
+   The stone rotates inside it, so the reflections slide and flash the way a real diamond does. */
+vec3 env(vec3 d){
+  float y=d.y,az=atan(d.z,d.x);
+  vec3 c=mix(vec3(.05,.05,.07),vec3(.5,.5,.53),smoothstep(-.2,.45,y));
+  c*=1.-.7*exp(-pow((y-.05)/.09,2.));
+  float strips=pow(.5+.5*cos(az*5.+1.3),18.)*smoothstep(-.05,.25,y)*smoothstep(.95,.45,y);
+  c+=vec3(1.3)*strips;
+  c+=vec3(1.1)*smoothstep(.86,.97,y);
+  float ring=pow(.5+.5*cos(az*7.-.4),6.)*smoothstep(.3,.5,y)*smoothstep(.85,.6,y);
+  c*=1.-.8*ring;                                            /* dark struts between the lights */
+  float cam=dot(d,normalize(uEye));
+  c*=1.-.92*smoothstep(.55,.9,cam);                        /* the dark camera and photographer in front */
+  return max(c,vec3(0.));
+}
+float noteLev(float pc){float l=0.;for(int i=0;i<12;i++){if(abs(float(i)-pc)<.5)l=uLev[i];}return l;}
+vec3 noteCol(float pc){vec3 c=vec3(1.);for(int i=0;i<12;i++){if(abs(float(i)-pc)<.5)c=uCol[i];}return c;}
+void main(){
+  vec3 n=normalize(vN),v=normalize(uEye-vW);
+  float ci=clamp(dot(n,v),0.,1.);
+  float fr=.17+.83*pow(1.-ci,5.);                           /* Fresnel for diamond, refractive index 2.42 */
+  vec3 refl=env(reflect(-v,n));
+  /* fake path through the stone: bend in, bounce off an imagined back facet, come back out */
+  vec3 t=refract(-v,n,1./2.42);
+  vec3 j=h3(vId+1.)-.5;
+  /* which back (pavilion) facet the light lands on, from where it entered: 24 facets round, 2 rings */
+  float az=atan(vM.z,vM.x)/6.2832;
+  float seg=floor(az*24.+.5);
+  float rad=length(vM.xz);
+  float a1=seg/24.*6.2832,tilt=rad<.38?1.05:.8;
+  mat3 R=mat3(uM);
+  vec3 p1=normalize(R*vec3(cos(a1)*tilt,-1.,sin(a1)*tilt));
+  vec3 p2=normalize(R*vec3(-cos(a1)*tilt*.95,-1.,-sin(a1)*tilt*.95));
+  vec3 e=reflect(reflect(t,p1),p2);
+  e=normalize(e+j*.18);
+  if(vM.y<-.03){                                            /* seen from the side, light passes through the pavilion and out of the crown */
+    vec3 up=normalize(R*vec3(cos(a1)*.5,1.,sin(a1)*.5));
+    e=normalize(reflect(t,up)+vec3(0,.35,0)+j*.5);
+    fr*=.6;
+  }
+  float vseg=mod(floor(az*12.+.5)+6.,12.);                  /* the opposite wedge, seen through the stone */
+  /* sparkle: on each note onset a few facets throw a burst of rainbow fire */
+  float pick=step(fract(sin(vId*91.7+uSeed*13.1)*4375.85),uSparkFrac);
+  float sp=uSpark*pick;
+  float disp=.035+sp*.32;
+  vec3 perp=normalize(cross(e,n)+vec3(1e-4));
+  vec3 inner=vec3(env(normalize(e+perp*disp)).r,env(e).g,env(normalize(e-perp*disp)).b);
+  /* the note colour for this facet; the table shows a blend of every note heard */
+  float pcT=mod(vseg*7.,12.);
+  float L=vPc<0.?noteLev(pcT):noteLev(vPc);
+  vec3 nc=vPc<0.?noteCol(pcT):noteCol(vPc);
+  inner*=vec3(.97,.985,1.);
+  inner=mix(inner,inner*(nc*1.5)+nc*.38,clamp(L*1.2,0.,1.));
+  vec3 col=mix(inner,refl,fr)+nc*L*L*.22;
+  col+=sp*(.45+.4*vec3(sin(uTime*9.+vId),sin(uTime*9.+vId+2.1),sin(uTime*9.+vId+4.2)));
+  /* fine facet edges, so the cut reads against the pale background */
+  float ed=min(vB.x,min(vB.y,vB.z));
+  float w=fwidth(ed)*1.1*uDpr;
+  col*=1.-.32*(1.-smoothstep(0.,w,ed));
+  col=col/(1.+col*.18);
+  gl_FragColor=vec4(clamp(col,0.,1.),1);
+}`;
+const SP_VS=`attribute vec3 aP;attribute vec3 aN;attribute float aId;uniform mat4 uM;uniform mat4 uVP;uniform vec3 uEye;
+uniform float uSeed;uniform float uSpark;uniform float uSparkFrac;uniform float uSize;varying float vA;varying float vId;
+void main(){vec4 w=uM*vec4(aP+aN*.02,1);vec3 n=mat3(uM)*aN;float face=dot(n,normalize(uEye-w.xyz));
+  float pick=step(fract(sin(aId*91.7+uSeed*13.1)*4375.85),uSparkFrac);
+  vA=uSpark*pick*smoothstep(.15,.5,face);vId=aId;gl_Position=uVP*w;gl_PointSize=vA>0.?uSize*(.6+.4*fract(aId*.618)):0.;}`;
+const SP_FS=`precision mediump float;varying float vA;varying float vId;uniform float uTime;
+void main(){vec2 q=gl_PointCoord*2.-1.;float r=length(q);
+  float core=exp(-r*r*9.);
+  float rays=exp(-abs(q.x)*22.)*exp(-abs(q.y)*2.2)+exp(-abs(q.y)*22.)*exp(-abs(q.x)*2.2);
+  float diag=(exp(-abs(q.x-q.y)*30.)+exp(-abs(q.x+q.y)*30.))*exp(-r*5.)*.5;
+  float a=clamp((core+rays*.8+diag)*vA,0.,1.);
+  float hue=r*3.+vId+uTime;vec3 rb=.5+.5*cos(6.2832*(hue+vec3(0.,.33,.67)));
+  vec3 c=mix(vec3(1.),rb,smoothstep(.05,.5,r));
+  gl_FragColor=vec4(c,a);}`;
+
+function prog(vs,fs){const p=gl.createProgram();for(const [t,s] of [[gl.VERTEX_SHADER,vs],[gl.FRAGMENT_SHADER,fs]]){const sh=gl.createShader(t);gl.shaderSource(sh,s);gl.compileShader(sh);
+  if(!gl.getShaderParameter(sh,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(sh));gl.attachShader(p,sh)}
+  gl.linkProgram(p);if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(p));
+  const u={},a={};const nu=gl.getProgramParameter(p,gl.ACTIVE_UNIFORMS);for(let i=0;i<nu;i++){const n=gl.getActiveUniform(p,i).name.replace('[0]','');u[n]=gl.getUniformLocation(p,n)}
+  const na=gl.getProgramParameter(p,gl.ACTIVE_ATTRIBUTES);for(let i=0;i<na;i++){const n=gl.getActiveAttrib(p,i).name;a[n]=gl.getAttribLocation(p,n)}
+  return {p,u,a}}
+gl.getExtension('OES_standard_derivatives');
+const GEM_FS_X='#extension GL_OES_standard_derivatives : enable\n'+GEM_FS;
+const P_BG=prog(BG_VS,BG_FS),P_GEM=prog(GEM_VS,GEM_FS_X),P_SP=prog(SP_VS,SP_FS);
+const GEM=buildGem();
+const bufBG=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,bufBG);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
+const bufGem=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,bufGem);gl.bufferData(gl.ARRAY_BUFFER,GEM.tri,gl.STATIC_DRAW);
+const bufSp=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,bufSp);gl.bufferData(gl.ARRAY_BUFFER,GEM.cent,gl.STATIC_DRAW);
+const gemCount=GEM.tri.length/11,spCount=GEM.cent.length/8;
+function attrs(P,stride,list){for(const [name,size,off] of list){const l=P.a[name];if(l===undefined||l<0)continue;gl.enableVertexAttribArray(l);gl.vertexAttribPointer(l,size,gl.FLOAT,false,stride*4,off*4)}}
+function unattrs(P){for(const k in P.a)gl.disableVertexAttribArray(P.a[k])}
+
+/* tiny matrix helpers (column-major) */
+const M4={
+  mul(a,b){const o=new Float32Array(16);for(let c=0;c<4;c++)for(let r=0;r<4;r++){let s=0;for(let k=0;k<4;k++)s+=a[k*4+r]*b[c*4+k];o[c*4+r]=s}return o},
+  persp(fy,asp,n,f){const t=1/Math.tan(fy/2),o=new Float32Array(16);o[0]=t/asp;o[5]=t;o[10]=(f+n)/(n-f);o[11]=-1;o[14]=2*f*n/(n-f);return o},
+  look(e,c,u){const z=norm(sub(e,c)),x=norm(cross(u,z)),y=cross(z,x);return new Float32Array([x[0],y[0],z[0],0,x[1],y[1],z[1],0,x[2],y[2],z[2],0,-dot(x,e),-dot(y,e),-dot(z,e),1])},
+  rotY(a){const c=Math.cos(a),s=Math.sin(a);return new Float32Array([c,0,-s,0,0,1,0,0,s,0,c,0,0,0,0,1])},
+  rotX(a){const c=Math.cos(a),s=Math.sin(a);return new Float32Array([1,0,0,0,0,c,s,0,0,-s,c,0,0,0,0,1])},
+  rotZ(a){const c=Math.cos(a),s=Math.sin(a);return new Float32Array([c,s,0,0,-s,c,0,0,0,0,1,0,0,0,0,1])}};
+function sub(a,b){return [a[0]-b[0],a[1]-b[1],a[2]-b[2]]}function dot(a,b){return a[0]*b[0]+a[1]*b[1]+a[2]*b[2]}
+function cross(a,b){return [a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]]}function norm(a){const m=Math.hypot(...a)||1;return [a[0]/m,a[1]/m,a[2]/m]}
+
+let W=1,H=1,DPR=1;
+function size(){DPR=Math.min(window.devicePixelRatio||1,2);W=innerWidth;H=innerHeight;cv.width=Math.round(W*DPR);cv.height=Math.round(H*DPR);gl.viewport(0,0,cv.width,cv.height)}
+addEventListener('resize',size);size();
+
+/* ================= music → light ================= */
+const S={lev:new Float32Array(12),viv:new Float32Array(12),mix:[1,1,1],mixL:0,spark:0,seed:1,sparkFrac:0,glow:0,glowCol:[1,1,1],ry:0,t:0,onsets:0,energy:0,mode:'notes'};
+function update(F,dt){
+  const k=Math.pow(.9,dt*60),kv=Math.pow(.97,dt*60);
+  for(let i=0;i<12;i++){S.lev[i]*=k;S.viv[i]*=kv}
+  S.energy=S.energy*k+(F?F.energy:0)*(1-k);
+  if(F){
+    for(const n of F.notes){const l=n.s*(.35+.65*F.energy);if(l>S.lev[n.pc])S.lev[n.pc]=l;if(n.v>S.viv[n.pc])S.viv[n.pc]=n.v}
+    if(F.onset){S.spark=1;S.onsets++;S.seed=(S.seed*9301+49297)%233280;S.sparkFrac=clamp(.1+.25*F.flux+.15*F.energy,.1,.45)}
+    /* bass glow: colour of the lowest clearly heard note, strength from the low end of the spectrum */
+    let low=null;for(const n of F.notes)if(n.s>.3&&(!low||n.midi<low.midi))low=n;
+    const target=clamp((F.bass-.15)*1.4)*(F.energy>.03?1:0);
+    S.glow+=(target-S.glow)*(1-Math.pow(.88,dt*60));
+    if(low){const c=NOTE_RGB[low.pc],a=1-Math.pow(.9,dt*60);for(let i=0;i<3;i++)S.glowCol[i]+=(c[i]-S.glowCol[i])*a}
+  }else S.glow*=k;
+  S.spark*=Math.pow(.86,dt*60);
+  let sum=0;const m=[0,0,0];
+  for(let i=0;i<12;i++){const l=S.lev[i];sum+=l;for(let c=0;c<3;c++)m[c]+=NOTE_RGB[i][c]*l}
+  if(sum>1e-4){for(let c=0;c<3;c++)S.mix[c]=m[c]/sum}
+  S.mixL=clamp(Math.max(...S.lev)*.85);
+}
+
+/* ================= drawing ================= */
+const colArr=new Float32Array(36);
+function draw(time){
+  const asp=W/H,fy=asp>=1?0.62:2*Math.atan(Math.tan(.31)/asp*.8);
+  const eye=[0,1.35,4.85],tgt=[0,-.16,0];
+  const proj=M4.persp(fy,asp,.1,50),view=M4.look(eye,tgt,[0,1,0]),VP=M4.mul(proj,view);
+  const M=M4.mul(M4.rotZ(Math.sin(S.t*.23)*.06),M4.mul(M4.rotX(Math.sin(S.t*.31)*.1),M4.rotY(S.ry)));
+  /* where the floor glow sits on screen: project a point under the stone */
+  const pv=(()=>{const p=[0,-1.05,0,1],o=[0,0,0,0];for(let r=0;r<4;r++)for(let c=0;c<4;c++)o[r]+=VP[c*4+r]*p[c];return [(o[0]/o[3]*.5+.5)*cv.width,(o[1]/o[3]*.5+.5)*cv.height]})();
+  const scale=cv.height/(2*Math.tan(fy/2)*4.9);           /* pixels per unit at the stone */
+  gl.disable(gl.DEPTH_TEST);gl.disable(gl.BLEND);
+  gl.useProgram(P_BG.p);gl.bindBuffer(gl.ARRAY_BUFFER,bufBG);attrs(P_BG,2,[['p',2,0]]);
+  gl.uniform2f(P_BG.u.uRes,cv.width,cv.height);gl.uniform2f(P_BG.u.uGem,pv[0],pv[1]);gl.uniform1f(P_BG.u.uScale,scale);
+  gl.uniform3fv(P_BG.u.uGlowCol,S.mode==='whole'?hsl((clamp((audio.currentTime||0)/(totalDur()||1))*360)%360,.92,.55):S.glowCol);gl.uniform1f(P_BG.u.uGlow,S.glow);
+  gl.drawArrays(gl.TRIANGLES,0,3);unattrs(P_BG);
+  gl.enable(gl.DEPTH_TEST);gl.clear(gl.DEPTH_BUFFER_BIT);gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK);gl.frontFace(gl.CCW);
+  gl.useProgram(P_GEM.p);gl.bindBuffer(gl.ARRAY_BUFFER,bufGem);
+  attrs(P_GEM,11,[['aP',3,0],['aN',3,3],['aPc',1,6],['aId',1,7],['aB',3,8]]);
+  gl.uniformMatrix4fv(P_GEM.u.uM,false,M);gl.uniformMatrix4fv(P_GEM.u.uVP,false,VP);gl.uniform3fv(P_GEM.u.uEye,eye);
+  /* Whole Song: every wedge takes a colour near one hue that travels round the spectrum over the length of the song;
+     the notes still set how brightly each wedge shines, and the overall loudness keeps the whole stone softly lit */
+  const whole=S.mode==='whole',prog=whole?clamp((audio.currentTime||0)/(totalDur()||1)):0;
+  const lv=new Float32Array(12);for(let i=0;i<12;i++){
+    const c=whole?hsl((prog*360+(hueOf(i)>180?hueOf(i)-360:hueOf(i))*.12+360)%360,.92,.55):NOTE_RGB[i];
+    lv[i]=clamp(whole?Math.max(S.lev[i]*1.3,S.energy*.9):S.lev[i]*1.3);const vv=.55+.45*clamp(S.viv[i]+.3);
+    for(let j=0;j<3;j++)colArr[i*3+j]=c[j]*vv+(1-vv)*.75}
+  gl.uniform1fv(P_GEM.u.uLev,lv);gl.uniform3fv(P_GEM.u.uCol,colArr);
+  gl.uniform1f(P_GEM.u.uSpark,S.spark);gl.uniform1f(P_GEM.u.uSeed,S.seed);gl.uniform1f(P_GEM.u.uSparkFrac,S.sparkFrac);gl.uniform1f(P_GEM.u.uTime,time);gl.uniform1f(P_GEM.u.uDpr,1);
+  gl.drawArrays(gl.TRIANGLES,0,gemCount);unattrs(P_GEM);
+  gl.disable(gl.CULL_FACE);
+  if(S.spark>.02){
+    gl.disable(gl.DEPTH_TEST);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
+    gl.useProgram(P_SP.p);gl.bindBuffer(gl.ARRAY_BUFFER,bufSp);attrs(P_SP,8,[['aP',3,0],['aN',3,3],['aId',1,7]]);
+    gl.uniformMatrix4fv(P_SP.u.uM,false,M);gl.uniformMatrix4fv(P_SP.u.uVP,false,VP);gl.uniform3fv(P_SP.u.uEye,eye);
+    gl.uniform1f(P_SP.u.uSeed,S.seed);gl.uniform1f(P_SP.u.uSpark,S.spark);gl.uniform1f(P_SP.u.uSparkFrac,S.sparkFrac);
+    gl.uniform1f(P_SP.u.uSize,Math.min(96*DPR,scale*.42));gl.uniform1f(P_SP.u.uTime,time);
+    gl.drawArrays(gl.POINTS,0,spCount);unattrs(P_SP);gl.disable(gl.BLEND);
+  }
+}
+
+/* ================= playback and the bottom bar ================= */
+let file=null,fileUrl='',demoUrl='',playing=false,starting=false,snapPending=false;
+const mmss=x=>Math.floor(x/60)+':'+String(Math.floor(x%60)).padStart(2,'0');
+const totalDur=()=>file?(isFinite(audio.duration)?audio.duration:0):(isFinite(audio.duration)&&audio.duration?audio.duration:duration);
+function syncUI(){
+  const d=totalDur(),c=audio.currentTime||0;
+  $('play').textContent=audio.paused?(audio.ended?'Replay':'Play'):'Pause';
+  $('play').setAttribute('aria-label',$('play').textContent);
+  $('clock').textContent=mmss(c)+' / '+mmss(d);
+  if(document.activeElement!==$('seek'))$('seek').value=d?Math.round(1000*c/d):0;
+}
+async function togglePlay(){
+  if(!audio.paused){audio.pause();syncUI();return}
+  if(starting)return;starting=true;
+  try{
+    if(!audio.getAttribute('src')){demoUrl=demoUrl||buildDemo();audio.src=demoUrl}
+    ensureAC();
+    if(!elSrc){elSrc=AC.createMediaElementSource(audio);output=AC.createGain();output.gain.value=1;elSrc.connect(analyser);elSrc.connect(output);output.connect(AC.destination)}
+    if(audio.ended)audio.currentTime=0;
+    await audio.play();
+  }catch(err){if(err.name!=='AbortError')say('This audio could not play. Try an MP3 or WAV file.')}
+  finally{starting=false;syncUI()}
+}
+function selectFile(f){
+  audio.pause();
+  if(fileUrl)URL.revokeObjectURL(fileUrl);
+  file=f;fileUrl=URL.createObjectURL(f);audio.src=fileUrl;audio.load();
+  $('track').textContent=$('track').title=f.name;
+  S.lev.fill(0);S.spark=0;S.glow=0;prevB&&prevB.fill(0);fluxAvg=lastOn=0;
+  say('Song loaded. Press Play to hear it.');
+  syncUI();
+}
+$('play').addEventListener('click',togglePlay);
+const MODE_NOTE={notes:'Each heard note lights its own wedge. Pitches are estimated from the sound.',
+  whole:'The colour travels through the spectrum from start to end of the song. Note strength still sets the brightness; pitches are estimated.'};
+document.querySelectorAll('#mode button').forEach(b=>b.addEventListener('click',()=>{S.mode=b.dataset.m;
+  document.querySelectorAll('#mode button').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));$('modeNote').textContent=MODE_NOTE[S.mode]}));
+$('upload').addEventListener('click',()=>$('file').click());
+$('file').addEventListener('change',e=>{const[f]=e.target.files;if(f)selectFile(f);e.target.value=''});
+$('seek').addEventListener('input',()=>{const d=totalDur();if(!audio.getAttribute('src')){demoUrl=demoUrl||buildDemo();audio.src=demoUrl}
+  const go=()=>{audio.currentTime=$('seek').value/1000*totalDur();syncUI()};if(audio.readyState)go();else audio.addEventListener('loadedmetadata',go,{once:true});if(!d)return});
+$('snap').addEventListener('click',()=>{snapPending=true});
+addEventListener('keydown',e=>{if(e.code==='Space'&&e.target===document.body){e.preventDefault();togglePlay()}});
+for(const ev of ['play','pause','ended','loadedmetadata','durationchange'])audio.addEventListener(ev,syncUI);
+audio.addEventListener('error',()=>{if(audio.getAttribute('src'))say('This audio file could not be read. Try an MP3 or WAV file.')});
+function snapshot(){
+  const t=Math.floor(audio.currentTime||0);
+  cv.toBlob(b=>{if(!b)return;const a=document.createElement('a');a.href=URL.createObjectURL(b);
+    a.download='the-sound-of-color-diamond-'+Math.floor(t/60)+'m'+String(t%60).padStart(2,'0')+'s.png';
+    document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000);say('Snapshot saved. The music keeps playing.')},'image/png');
+}
+
+/* ================= main loop ================= */
+const FPS={frames:0,since:0,value:0,times:[]};
+let prev=0,uiT=0;
+function frame(now){
+  requestAnimationFrame(frame);
+  const dt=prev?Math.min(.1,(now-prev)/1000):1/60;prev=now;
+  const live=AC&&!audio.paused;
+  const F=live?analyse(now):null;
+  update(F,dt);
+  S.t+=dt;S.ry+=dt*(.22+(F?F.energy*.25:0));
+  draw(now/1000);
+  if(snapPending){snapPending=false;snapshot()}
+  FPS.frames++;FPS.times.push(now);if(FPS.times.length>240)FPS.times.shift();
+  if(now-FPS.since>1000){FPS.value=FPS.frames*1000/(now-FPS.since);FPS.frames=0;FPS.since=now}
+  if(now-uiT>250){uiT=now;syncUI()}
+}
+requestAnimationFrame(frame);
+/* for testing in a browser console: DIAMOND.fps, DIAMOND.state */
+window.DIAMOND={get fps(){return FPS.value},get output(){return output},state:S,frameTimes:FPS.times,update,draw,gl,faces:GEM.faces};
+</script>
+</body>
+</html>

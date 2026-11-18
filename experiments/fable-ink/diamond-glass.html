@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Sound of Color · Glass crystal and diamond (local prototype)</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap">
+<style>
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;overflow:hidden}
+  body{font:15px/1.4 "Instrument Sans",system-ui,sans-serif;background:#0b0a10;color:#f2eef6}
+  body.light{background:#f4f1ec;color:#1d1424}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+  h1{position:fixed;left:24px;top:16px;margin:0;font:normal 1.5rem/1 "Instrument Serif",Georgia,serif;opacity:.85}
+  footer{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center;
+    background:rgba(255,255,255,.08);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border-radius:99px;padding:8px 12px;max-width:calc(100% - 24px)}
+  body.light footer{background:rgba(255,255,255,.75);box-shadow:0 6px 24px rgba(37,22,48,.12)}
+  button{font:inherit;color:inherit;cursor:pointer;border:1px solid rgba(255,255,255,.25);border-radius:99px;background:transparent;padding:5px 13px}
+  body.light button{border-color:rgba(29,20,36,.2)}
+  #play{background:#fff;color:#1d1424;border-color:#fff;min-width:6.5em}
+  body.light #play{background:#2b1e32;color:#fff;border-color:#2b1e32}
+  #info{font-size:.82rem;opacity:.7;min-width:11ch}
+  :focus-visible{outline:2px solid #b98cff;outline-offset:2px}
+</style>
+<canvas id="cv" role="img" aria-label="A slowly turning diamond whose flashes of color follow the music"></canvas>
+<h1>The Sound of <em>Color</em> · Glass</h1>
+<footer aria-label="Playback">
+  <button type="button" id="play">Play demo</button>
+  <button type="button" id="choose">Choose a song</button>
+  <button type="button" id="mute" aria-pressed="false">Mute</button>
+  <button type="button" id="shape">Shape: Crystal</button>
+  <span id="info">18-second demo</span>
+  <input type="file" id="file" accept="audio/*,.mp3,.wav,.m4a,.ogg,.flac" hidden>
+  <audio id="audio" preload="metadata"></audio>
+</footer>
+<script>
+(() => {
+const $=id=>document.getElementById(id);
+const cv=$('cv'), audio=$('audio');
+let W=0,H=0,DPR=1;
+const clamp=(x,a=0,b=1)=>Math.max(a,Math.min(b,x));
+const hueOf=pc=>((pc*7)%12)*30;
+function vivid(n,F){return clamp(n.s*.55+F.bright*.35+F.energy*.25+(n.midi>72?.1:0)-(n.midi<50?.28:0))}
+const duration=18;
+
+/* ---------- music analysis and built-in demo, copied unchanged from ink.html ---------- */
+let AC=null,analyser=null,fbuf,bbuf,prevB,elSrc=null;
+let fluxAvg=0,lastOn=0;
+function ensureAC(){
+  if(!AC){
+    AC=new (window.AudioContext||window.webkitAudioContext)();
+    analyser=AC.createAnalyser();analyser.fftSize=8192;analyser.smoothingTimeConstant=.55;analyser.minDecibels=-100;analyser.maxDecibels=-10;
+    const mute=AC.createGain();mute.gain.value=0;analyser.connect(mute);mute.connect(AC.destination);
+    fbuf=new Float32Array(analyser.frequencyBinCount);bbuf=new Uint8Array(analyser.frequencyBinCount);prevB=new Uint8Array(analyser.frequencyBinCount);
+  }
+  if(AC.state==='suspended')AC.resume();
+}
+function analyse(now){
+  const F={notes:[],chroma:new Float32Array(12),energy:0,bass:0,bright:.5,onset:false,flux:0};
+  analyser.getFloatFrequencyData(fbuf);analyser.getByteFrequencyData(bbuf);
+  const hz=AC.sampleRate/analyser.fftSize,lo=Math.ceil(60/hz),hi=Math.min(fbuf.length-2,Math.floor(5000/hz)),top=Math.min(bbuf.length,Math.floor(9000/hz));
+  let flux=0,sum=0,bs=0,bn=0,cw=0;
+  for(let i=1;i<top;i++){const b=bbuf[i],d=b-prevB[i];if(d>0)flux+=d;prevB[i]=b;sum+=b;if(i*hz<160){bs+=b;bn++}cw+=b*Math.log2(i*hz)}
+  flux/=top*255;
+  let mx=-200;for(let i=lo;i<=hi;i++)if(fbuf[i]>mx)mx=fbuf[i];
+  F.energy=mx<-78?0:clamp(clamp((sum/(top*255)-.1)*2)*.5+clamp((mx+72)/50)*.6);
+  F.bass=clamp(bs/(bn*255)*1.25);
+  F.bright=sum?clamp((cw/sum-8.6)/2.6):.5;
+  if(flux>fluxAvg*1.6+.004&&now-lastOn>110&&F.energy>.05){F.onset=true;lastOn=now}
+  fluxAvg=fluxAvg*.93+flux*.07;
+  F.flux=clamp(flux*18);
+  if(mx<-78)return F;
+  const floor=mx-32,best=new Map();
+  for(let i=lo;i<=hi;i++){const v=fbuf[i];
+    if(v>floor&&v>fbuf[i-1]&&v>=fbuf[i+1]){const m=Math.round(69+12*Math.log2(i*hz/440)),s=(v-floor)/32;if(!(best.get(m)>=s))best.set(m,s)}}
+  let cm=0;
+  best.forEach((s,m)=>{F.notes.push({midi:m,pc:m%12,s,v:0});F.chroma[m%12]+=s;if(F.chroma[m%12]>cm)cm=F.chroma[m%12]});
+  if(cm)for(let i=0;i<12;i++)F.chroma[i]/=cm;
+  F.notes.sort((a,b)=>b.s-a.s);F.notes.length=Math.min(F.notes.length,6);
+  for(const n of F.notes)n.v=vivid(n,F);
+  return F;
+}
+
+
+function buildDemo() {
+  const rate = 22050;
+  const samples = new Float32Array(rate * duration);
+  const chords = [[57,60,64,69],[53,57,60,65],[48,55,64,67],[55,59,62,71]];
+  // Separate attacks, a quiet gap, then overlapping notes to show both ink behaviors.
+  for (const [section, chord] of chords.entries()) {
+    for (const [voice, midi] of chord.entries()) {
+      const offset = Math.round(rate * (section * 4.25 + voice * (section < 2 ? .48 : .21)));
+      const length = Math.round(rate * (section === 0 ? 1.4 : 2.9));
+      const frequency = 440 * 2 ** ((midi - 69) / 12);
+      for (let i = 0; i < length && offset + i < samples.length; i++) {
+        const progress = i / length;
+        const envelope = Math.min(1, i / (rate * .028)) * (1 - progress) ** 1.8;
+        const phase = 2 * Math.PI * frequency * i / rate;
+        samples[offset + i] += envelope * (.16 * Math.sin(phase) + .038 * Math.sin(phase * 2));
+      }
+    }
+  }
+  const buffer = new ArrayBuffer(44 + samples.length * 2);
+  const wav = new DataView(buffer);
+  for (const [offset, word] of [[0,'RIFF'],[8,'WAVE'],[12,'fmt '],[36,'data']]) {
+    [...word].forEach((char, index) => wav.setUint8(offset + index, char.charCodeAt(0)));
+  }
+  wav.setUint32(4, buffer.byteLength - 8, true);
+  wav.setUint32(16, 16, true);
+  wav.setUint16(20, 1, true);
+  wav.setUint16(22, 1, true);
+  wav.setUint32(24, rate, true);
+  wav.setUint32(28, rate * 2, true);
+  wav.setUint16(32, 2, true);
+  wav.setUint16(34, 16, true);
+  wav.setUint32(40, samples.length * 2, true);
+  samples.forEach((sample, index) => wav.setInt16(44 + index * 2, Math.round(clamp(sample, -1, 1) * 32767), true));
+  return URL.createObjectURL(new Blob([buffer], {type:'audio/wav'}));
+}
+
+
+
+/* ---------- the stone: a round brilliant cut, 57 flat facets ----------
+   Each facet is stored as a flat plane. The stone is the space inside all 57 planes, which lets the graphics card
+   follow a ray of light into the glass, bounce it around inside, and see where it comes back out. */
+const V=[],FACETS=[];
+const ring=(r,y,n,off)=>{const s=V.length;for(let i=0;i<n;i++){const a=(i+off)/n*Math.PI*2;V.push([Math.cos(a)*r,y+.2,Math.sin(a)*r])}return s};
+const T=ring(.56,.36,8,0),S=ring(.8,.2,8,.5),G=ring(1,0,16,0),L=ring(.47,-.5,8,.5),C=V.length;V.push([0,-.66,0]);
+const m8=i=>(i+8)%8,m16=i=>(i+16)%16;
+FACETS.push([0,1,2,3,4,5,6,7].map(i=>T+i));
+for(let i=0;i<8;i++){
+  FACETS.push([T+i,T+m8(i+1),S+i],[T+i,S+i,G+2*i,S+m8(i-1)],[S+i,G+m16(2*i+1),G+2*i],[S+i,G+m16(2*i+2),G+m16(2*i+1)],
+    [C,L+m8(i-1),G+2*i,L+i],[L+i,G+2*i,G+m16(2*i+1)],[L+i,G+m16(2*i+1),G+m16(2*i+2)]);
+}
+const PLANES=new Float32Array(57*4);
+FACETS.forEach((f,k)=>{
+  const a=V[f[0]],b=V[f[1]],c=V[f[2]];
+  let nx=(b[1]-a[1])*(c[2]-a[2])-(b[2]-a[2])*(c[1]-a[1]),ny=(b[2]-a[2])*(c[0]-a[0])-(b[0]-a[0])*(c[2]-a[2]),nz=(b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]);
+  const m=Math.hypot(nx,ny,nz);nx/=m;ny/=m;nz/=m;
+  let mx=0,my=0,mz=0;for(const i of f){mx+=V[i][0];my+=V[i][1];mz+=V[i][2]}
+  if(nx*mx+ny*(my-f.length*.05)+nz*mz<0){nx=-nx;ny=-ny;nz=-nz}
+  let d=-1e9;for(const i of f)d=Math.max(d,nx*V[i][0]+ny*V[i][1]+nz*V[i][2]);
+  PLANES.set([nx,ny,nz,d],k*4);
+});
+
+/* a second shape for the same glass: a rock crystal, six long sides with a six-sided point at each end */
+const CRYSTAL=new Float32Array(57*4);
+for(let i=0;i<6;i++){
+  const a=i/6*Math.PI*2,cx=Math.cos(a),cz=Math.sin(a),alt=i%2;
+  CRYSTAL.set([cx,0,cz,.42*(alt?.97:1.03)],i*4);
+  CRYSTAL.set([cx*.6/.7324,.42/.7324,cz*.6/.7324,.7455*(alt?.965:1)],(6+i)*4);
+  CRYSTAL.set([cx*.35/.5467,-.42/.5467,cz*.35/.5467,.8835*(alt?1:.97)],(12+i)*4);
+}
+const SHAPES={
+  crystal:{planes:CRYSTAL,n:18,ior:1.5,spread:.035,zoom:.5,edge:.01,tilt:.22,nod:.06,lean:.28,white:.7,expo:1.05,floor:-1.42,sparkle:0,label:'Crystal'},
+  diamond:{planes:PLANES,n:57,ior:2.42,spread:.06,zoom:.42,edge:.005,tilt:.07,nod:.03,lean:0,white:.3,expo:.5,floor:-.98,sparkle:1,label:'Diamond'}
+};
+let shape='crystal';
+/* in silence the glass keeps a faint cool tint, so it never looks grey */
+const idle=new Float32Array(12),sendLev=new Float32Array(12);
+for(let pc=0;pc<12;pc++){const h=((pc*7)%12)*30;idle[pc]=h>=150&&h<=270?.32:0}
+
+/* how strongly each of the twelve notes is sounding right now */
+const lev=new Float32Array(12),viv=new Float32Array(12);
+let spin=0,time=0,flash=0,energy=0;
+function hear(F){
+  for(const n of F.notes){const l=n.s*(.35+.65*F.energy);if(l>lev[n.pc])lev[n.pc]=l;if(n.v>viv[n.pc])viv[n.pc]=n.v}
+  if(F.onset)flash=Math.min(1,flash+.5+F.flux*.5);
+  energy+=(F.energy-energy)*.1;
+}
+/* the twelve note colors, the same hues as the rest of the app, as red-green-blue light */
+const NOTE_RGB=new Float32Array(36);
+for(let pc=0;pc<12;pc++){const h=hueOf(pc)/60,f=n=>{const k=(n+h)%6;return 1-Math.max(0,Math.min(k,4-k,1))*.92};NOTE_RGB.set([f(5),f(3),f(1)],pc*3)}
+
+const FS=`#version 300 es
+precision highp float;
+out vec4 o;
+uniform vec2 uRes;
+uniform mat3 uToStone,uToRoom;
+uniform vec4 uPlanes[57];
+uniform float uLev[12];
+uniform vec3 uCol[12];
+uniform vec3 uKey;
+uniform float uFlash,uSpin,uSpread,uGlow,uIor,uZoom,uEdge,uWhite,uExpo,uFloor,uPulse;
+uniform vec3 uTint;
+float gBack;
+uniform int uN;
+
+/* the room the stone sits in: a dark studio, a moving white key light, two soft white strips for contrast, and
+   one colored lamp per note. A lamp is only on while its note is sounding. */
+vec3 room(vec3 d){
+  vec3 c=vec3(.012,.014,.022)+.03*max(d.y,0.);
+  float k=max(dot(d,uKey),0.);
+  c+=vec3(1.,.98,.95)*(pow(k,60.)*(5.+6.*uFlash)+pow(k,6.)*.35)*(.4+.6*uWhite);
+  c+=vec3(.9,.95,1.)*smoothstep(.06,.0,abs(d.y-.55+.2*d.x))*step(0.,d.z)*uWhite;
+  c+=vec3(1.)*smoothstep(.05,.0,abs(d.x+.6-.3*d.y))*step(d.z,0.)*uWhite*.75;
+  for(int i=0;i<12;i++){
+    float a=float(i)*.5236+uSpin*.35;
+    vec3 l=normalize(vec3(cos(a),.25+.45*sin(a*3.),sin(a)));
+    float w=max(dot(d,l),0.);
+    c+=uCol[i]*uLev[i]*(pow(w,14.)*uGlow+pow(w,3.)*.3);
+  }
+  vec3 q=floor(d*22.);float hsh=fract(sin(dot(q,vec3(12.9898,78.233,37.719)))*43758.5453);
+  c+=uTint*step(.965,hsh)*uPulse*5.;
+  return c;
+}
+float schlick(float c){float r=(uIor-1.)/(uIor+1.);r*=r;return r+(1.-r)*pow(1.-clamp(c,0.,1.),5.);}
+
+/* follow one color of light through the glass. A different bend for red, green and blue is what makes "fire". */
+float inside(vec3 p,vec3 n,vec3 rd,float ior,int ch){
+  vec3 d=refract(rd,n,1./ior);float keep=1.,sum=0.;
+  for(int b=0;b<6;b++){
+    float tf=1e9,tf2=1e9;vec3 nf=vec3(0.,1.,0.);
+    for(int i=0;i<57;i++){if(i>=uN)break;vec4 pl=uPlanes[i];float den=dot(pl.xyz,d);if(den>1e-5){float t=(pl.w-dot(pl.xyz,p))/den;if(t<tf){tf2=tf;tf=t;nf=pl.xyz;}else if(t<tf2){tf2=t;}}}
+    if(b==0)gBack=smoothstep(uEdge*1.6,0.,tf2-tf);
+    p+=d*tf;
+    vec3 outd=refract(d,-nf,ior);
+    float F=1.;
+    if(dot(outd,outd)>0.){F=schlick(dot(outd,nf));sum+=keep*(1.-F)*room(uToRoom*outd)[ch];}
+    keep*=F;d=reflect(d,nf);p-=nf*1e-4;
+    if(keep<.03)break;
+  }
+  return sum+keep*room(uToRoom*d)[ch]*.6;
+}
+
+/* what one ray of sight sees if it meets the glass; hit says whether it did */
+vec3 glassAt(vec3 so,vec3 sd,out bool hit){
+  float tn=-1e9,tn2=-1e9,tf=1e9;vec3 nn=vec3(0.);bool miss=false;
+  for(int i=0;i<57;i++){if(i>=uN)break;vec4 pl=uPlanes[i];float den=dot(pl.xyz,sd),dist=dot(pl.xyz,so)-pl.w;
+    if(den<-1e-6){float t=-dist/den;if(t>tn){tn2=tn;tn=t;nn=pl.xyz;}else if(t>tn2){tn2=t;}}
+    else if(den>1e-6){tf=min(tf,-dist/den);}
+    else if(dist>0.)miss=true;}
+  hit=!miss&&tn<tf&&tn>0.;
+  if(!hit)return vec3(0.);
+  vec3 p=so+sd*tn;
+  float F=schlick(dot(-sd,nn));
+  gBack=0.;
+  vec3 glass=vec3(inside(p,nn,sd,uIor-uSpread,0),inside(p,nn,sd,uIor,1),inside(p,nn,sd,uIor+uSpread,2));
+  vec3 col=F*room(uToRoom*reflect(sd,nn))+(1.-F)*glass;
+  /* thin bright lines where faces meet: the near edges, and more faintly the far edges seen through the glass */
+  col+=vec3(.75,.85,1.)*(smoothstep(uEdge,0.,tn-tn2)*.7+gBack*.32);
+  return col;
+}
+void main(){
+  vec2 uv=(gl_FragCoord.xy*2.-uRes)/uRes.y;uv.y-=.12;
+  vec3 ro=vec3(0.,0.,4.),rd=normalize(vec3(uv*uZoom,-1.));
+  bool hit;vec3 col=glassAt(uToStone*ro,uToStone*rd,hit);
+  if(!hit){
+    /* backdrop: studio glow, the incoming beam, a soft shadow, and colored light thrown on the floor */
+    col=mix(vec3(.004,.004,.007),vec3(.035,.035,.05),smoothstep(1.6,0.,length((uv+vec2(0.,.5))*vec2(.6,1.))));
+    vec2 a=vec2(-1.9,1.25),b=vec2(-.2,.25),pa=uv-a,ba=b-a;float h=clamp(dot(pa,ba)/dot(ba,ba),0.,1.);
+    col+=vec3(.9,.92,1.)*smoothstep(.04+.2*h,0.,length(pa-ba*h))*(.006+.022*h)*(1.+2.*uFlash);
+    float fy=uv.y+.86;
+    col*=1.-.6*exp(-(uv.x*uv.x*2.5+fy*fy*40.));
+    for(int i=0;i<12;i++){
+      float an=float(i)*.5236+uSpin;vec2 c=vec2(cos(an)*.55,-.9+.07*sin(an));
+      vec2 q=(uv-c)*vec2(3.2,11.);float s=sin(an*2.+.5);q=vec2(q.x+q.y*s*.6,q.y);
+      col+=uCol[i]*uLev[i]*exp(-dot(q,q))*.5;
+    }
+    /* the floor is a dark polished surface, so the glass is mirrored in it, fading with distance */
+    if(rd.y<-1e-4){
+      float t=(uFloor-ro.y)/rd.y;vec3 pf=ro+rd*t;
+      bool h2;vec3 mir=glassAt(uToStone*pf,uToStone*vec3(rd.x,-rd.y,rd.z),h2);
+      if(h2)col+=mir*.38*exp(-.45*length(pf.xz));
+    }
+  }
+  col=1.-exp(-col*uExpo);
+  col=pow(col,vec3(.4545));
+  float n=fract(sin(dot(gl_FragCoord.xy,vec2(12.9898,78.233)))*43758.5453);
+  o=vec4(col+(n-.5)/255.,1.);
+}`;
+
+const gl=cv.getContext('webgl2',{antialias:false,alpha:false});
+let prog=null,U={};
+const look={glow:11};
+function build(){
+  const sh=(t,src)=>{const s=gl.createShader(t);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(s));return s};
+  prog=gl.createProgram();
+  gl.attachShader(prog,sh(gl.VERTEX_SHADER,'#version 300 es\nvoid main(){vec2 p=vec2(float((gl_VertexID<<1)&2),float(gl_VertexID&2));gl_Position=vec4(p*2.-1.,0.,1.);}'));
+  gl.attachShader(prog,sh(gl.FRAGMENT_SHADER,FS));gl.linkProgram(prog);
+  if(!gl.getProgramParameter(prog,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(prog));
+  gl.useProgram(prog);
+  for(const n of ['uRes','uToStone','uToRoom','uPlanes','uLev','uCol','uKey','uFlash','uSpin','uSpread','uGlow','uIor','uZoom','uEdge','uN','uWhite','uExpo','uFloor','uPulse','uTint'])U[n]=gl.getUniformLocation(prog,n);
+  gl.uniform3fv(U.uCol,NOTE_RGB);
+}
+function setShape(name){
+  shape=name;const S=SHAPES[name];
+  if(ok||prog){gl.uniform4fv(U.uPlanes,S.planes);gl.uniform1i(U.uN,S.n);gl.uniform1f(U.uIor,S.ior);gl.uniform1f(U.uSpread,S.spread);gl.uniform1f(U.uZoom,S.zoom);gl.uniform1f(U.uEdge,S.edge);gl.uniform1f(U.uWhite,S.white);gl.uniform1f(U.uExpo,S.expo);gl.uniform1f(U.uFloor,S.floor)}
+  const b=$('shape');if(b)b.textContent='Shape: '+S.label;
+}
+let ok=false;
+try{if(gl){build();setShape(shape);ok=true}}catch(e){console.warn('Glass diamond could not start',e)}
+if(!ok)$('info').textContent='This browser cannot draw the glass diamond.';
+
+function draw(){
+  if(!ok)return;
+  time+=1/60;
+  for(let i=0;i<12;i++){lev[i]*=.975;viv[i]*=.99}
+  flash*=.92;if(audio.paused)energy*=.97;
+  /* the stone turns slowly and nods a little; louder music turns it slightly faster */
+  spin+=.0012+energy*.011;
+  const S=SHAPES[shape],tilt=S.tilt+S.nod*Math.sin(time*.21),c=Math.cos(spin),s=Math.sin(spin),ct=Math.cos(tilt),st=Math.sin(tilt);
+  /* rows of the turn that takes the stone into the room: spin about its own axis, tilt toward the viewer, then lean */
+  const M0=[[c,0,s],[st*s,ct,-st*c],[-ct*s,st,ct*c]],cl=Math.cos(S.lean),sl=Math.sin(S.lean);
+  const M=[M0[0].map((v,k)=>cl*v-sl*M0[1][k]),M0[0].map((v,k)=>sl*v+cl*M0[1][k]),M0[2]];
+  const cols=m=>[m[0][0],m[1][0],m[2][0],m[0][1],m[1][1],m[2][1],m[0][2],m[1][2],m[2][2]];
+  const Mt=[[M[0][0],M[1][0],M[2][0]],[M[0][1],M[1][1],M[2][1]],[M[0][2],M[1][2],M[2][2]]];
+  /* the white light drifts across the upper left */
+  const la=-.85+.45*Math.sin(time*.27),kx=Math.sin(la),ky=.75,kz=.6+.2*Math.cos(time*.19),kn=Math.hypot(kx,ky,kz);
+  gl.viewport(0,0,cv.width,cv.height);
+  gl.uniform2f(U.uRes,cv.width,cv.height);
+  gl.uniformMatrix3fv(U.uToRoom,false,cols(M));gl.uniformMatrix3fv(U.uToStone,false,cols(Mt));
+  /* the cool resting tint shows only in silence; as notes sound it steps aside so the trigger's colors take over */
+  let sum=0;for(let i=0;i<12;i++)sum+=lev[i];const rest=Math.max(0,1-sum*2.5);
+  for(let i=0;i<12;i++)sendLev[i]=Math.max(Math.min(1,lev[i]*1.6),idle[i]*rest);
+  gl.uniform1fv(U.uLev,sendLev);gl.uniform3f(U.uKey,kx/kn,ky/kn,kz/kn);
+  /* sparkle takes the blended color of the notes sounding now, and flares with each beat */
+  let tr=0,tg=0,tb=0,tw=0;for(let i=0;i<12;i++){const w=lev[i];tr+=NOTE_RGB[i*3]*w;tg+=NOTE_RGB[i*3+1]*w;tb+=NOTE_RGB[i*3+2]*w;tw+=w}
+  if(tw>.01)gl.uniform3f(U.uTint,tr/tw,tg/tw,tb/tw);else gl.uniform3f(U.uTint,.8,.9,1);
+  gl.uniform1f(U.uPulse,Math.min(1,flash*.9+energy*.5)*(tw>.01?1:0)*SHAPES[shape].sparkle);
+  gl.uniform1f(U.uFlash,flash);gl.uniform1f(U.uSpin,spin);gl.uniform1f(U.uGlow,look.glow);
+  gl.drawArrays(gl.TRIANGLES,0,3);
+}
+
+/* ---------- page ---------- */
+let demoUrl='',elOut=null,file=null;
+function sizeCanvas(){W=innerWidth||1;H=innerHeight||1;DPR=Math.min(devicePixelRatio||1,1.5);cv.width=Math.round(W*DPR);cv.height=Math.round(H*DPR)}
+function sync(){$('play').textContent=audio.paused?(audio.currentTime&&!audio.ended?'Resume':file?'Play song':'Play demo'):'Pause'}
+async function toggle(){
+  if(!audio.paused){audio.pause();return}
+  if(!audio.getAttribute('src')){demoUrl=demoUrl||buildDemo();audio.src=demoUrl}
+  ensureAC();
+  if(!elSrc){elSrc=AC.createMediaElementSource(audio);elOut=AC.createGain();elOut.gain.value=Number($('mute').getAttribute('aria-pressed')==='false');elSrc.connect(analyser);elSrc.connect(elOut);elOut.connect(AC.destination)}
+  try{await audio.play()}catch(e){$('info').textContent='This audio could not play.'}
+  sync();
+}
+$('play').addEventListener('click',toggle);
+$('choose').addEventListener('click',()=>$('file').click());
+$('file').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;audio.pause();file=f;audio.src=URL.createObjectURL(f);$('info').textContent=f.name;e.target.value='';sync()});
+$('mute').addEventListener('click',e=>{const b=e.currentTarget,m=b.getAttribute('aria-pressed')==='false';b.setAttribute('aria-pressed',String(m));b.textContent=m?'Unmute':'Mute';if(elOut)elOut.gain.value=m?0:1});
+$('shape').addEventListener('click',()=>setShape(shape==='crystal'?'diamond':'crystal'));
+for(const ev of ['play','pause','ended'])audio.addEventListener(ev,sync);
+addEventListener('resize',sizeCanvas);
+function loop(now){requestAnimationFrame(loop);if(!W||!H)return;if(!audio.paused&&analyser)hear(analyse(now));draw()}
+/* local experiment only: lets a tester light up notes without sound */
+window.__diamond={lev,viv,look,SHAPES,setShape,strike(pcs){for(const pc of pcs){lev[pc]=1;viv[pc]=.9}flash=1;energy=.6}};
+sizeCanvas();requestAnimationFrame(loop);
+})();
+</script>
+</html>

@@ -1,0 +1,778 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Sound of Color · Ink in water</title>
+<style>
+  *{box-sizing:border-box}
+  :root{font:15px/1.45 "Instrument Sans",system-ui,sans-serif;color:#20201e;background:white}
+  body{margin:0}
+  main{position:fixed;inset:0}
+  canvas{display:block;width:100%;height:100%}
+  header,footer{position:fixed;left:50%;transform:translateX(-50%);width:max-content;max-width:calc(100% - 24px);background:#fff;box-shadow:0 6px 24px #2516301a;border-radius:16px;padding:12px 16px}
+  header{top:12px;text-align:center}
+  footer{bottom:12px;display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap}
+  h1{font:normal clamp(1.65rem,4vw,2.25rem)/1.1 "Instrument Serif",Georgia,serif;letter-spacing:-.025em;margin:0 0 10px}
+  p{margin:7px 0 0;color:#514754;font-size:.87rem}
+  fieldset{border:0;margin:0;padding:0;display:flex;justify-content:center;gap:4px}
+  label,button{font:inherit;cursor:pointer;border:1px solid #d6cadb;border-radius:99px;background:white;color:#2b1e32;padding:5px 12px}
+  button:hover,label:hover{background:#f4edf8}
+  label:has(:checked),#play{background:#382343;color:white;border-color:#382343}
+  input[type=radio],.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+  :focus-visible,label:has(:focus-visible){outline:2px solid #7832a1;outline-offset:3px}
+  #play:disabled{opacity:.6;cursor:wait}
+  #track,#clock{font-size:.82rem;color:#514754}
+  #track{max-width:18ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #clock{font-variant-numeric:tabular-nums;min-width:7ch}
+  [hidden]{display:none!important}
+</style>
+<main><canvas id="cv" role="img" aria-label="Music-reactive ink spreading through water"></canvas></main>
+<header>
+  <h1>The Sound of Color</h1>
+  <fieldset>
+    <legend class="sr-only">Ink behavior</legend>
+    <label><input type="radio" name="mode" value="fade" checked>Fade with music</label>
+    <label><input type="radio" name="mode" value="paint">Build a painting</label>
+  </fieldset>
+  <p id="description">Clouds slowly dissolve as new notes arrive.</p>
+</header>
+<footer aria-label="Playback">
+  <button type="button" id="play">Play demo</button>
+  <button type="button" id="restart" hidden>Start over</button>
+  <button type="button" id="choose">Choose a song</button>
+  <button type="button" id="demo" hidden>Use demo</button>
+  <button type="button" id="mute" aria-pressed="false">Mute</button>
+  <button type="button" id="save" hidden>Save painting</button>
+  <span id="track">18-second demo</span>
+  <span id="clock">0:00</span>
+  <span class="sr-only" id="status" role="status"></span>
+  <input type="file" id="file" accept="audio/*,.mp3,.wav,.m4a,.ogg,.flac" hidden>
+  <audio id="audio" preload="metadata"></audio>
+</footer>
+<script>
+(() => {
+const $=id=>document.getElementById(id);
+const cv=$('cv'), g=cv.getContext('2d'), audio=$('audio');
+let W=0,H=0,DPR=1;
+const NOTE=['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
+const clamp=(x,a=0,b=1)=>Math.max(a,Math.min(b,x));
+const sstep=(a,b,x)=>{x=clamp((x-a)/(b-a));return x*x*(3-2*x)};
+const rnd=(a=1,b)=>b===undefined?Math.random()*a:a+Math.random()*(b-a);
+
+/* ---------- color: pitch class -> hue, walking the circle of fifths so related notes sit side by side ---------- */
+const hueOf=pc=>((pc*7)%12)*30;
+/* v = vividness 0..1. Low v gives a greyed, dull pigment; high v gives full neon. */
+function vivid(n,F){return clamp(n.s*.55+F.bright*.35+F.energy*.25+(n.midi>72?.1:0)-(n.midi<50?.28:0))}
+const yOf=m=>H*(.93-.86*clamp((m-36)/60));
+
+/* ---------- canvas ---------- */
+const INK_CPU={
+  surface:document.createElement('canvas'),drops:[],time:0,lastDrop:0,quiet:0,
+  init(){
+    const cell=Math.max(3,Math.sqrt(W*H/29000));
+    this.cols=Math.max(8,Math.round(W/cell));
+    this.rows=Math.max(8,Math.round(H/cell));
+    const {cols,rows}=this;
+    this.surface.width=cols;this.surface.height=rows;
+    this.ctx=this.surface.getContext('2d');
+    this.pixels=this.ctx.createImageData(cols,rows);
+    const field=()=>new Float32Array(cols*rows);
+    this.u=field();this.v=field();this.uNext=field();this.vNext=field();
+    this.pressure=field();this.divergence=field();this.curl=field();
+    this.dye=[field(),field(),field()];this.dyeNext=[field(),field(),field()];
+    this.reverse=field();
+    this.drops=[];this.time=0;this.lastDrop=-2;this.quiet=0;this.wet=false;
+    this.draw();
+  },
+  release(x,y,hue,strength=1,delay=0){
+    this.drops.push({x:clamp(x,.01,.99)*this.cols,y:clamp(y,.015,.94)*this.rows,
+      hue,strength,age:-delay,fall:.48,side:x<.5?1:-1});
+    this.lastDrop=this.time;
+    this.quiet=0;this.wet=true;
+  },
+  frame(F){
+    if(!F||F.energy<.035||this.time-this.lastDrop<(F.onset?.28:.48))return;
+    const notes=F.notes.filter(n=>n.s>.22).slice(0,4);
+    for(const [i,note] of notes.entries()){
+      this.release(rnd(.03,.97),clamp(yOf(note.midi)/H,.08,.85),
+        hueOf(note.pc),.8+note.s*.75+F.energy*.5,i*.08);
+    }
+  },
+  deposit(drop,dt){
+    const {cols,rows,u,v,dye}=this;
+    const age=drop.age-drop.fall;
+    const progress=clamp(age/.76);
+    const fade=Math.sin(Math.PI*(.17+.83*progress));
+    const scale=Math.min(cols,rows);
+    const r=Math.max(2.8,scale*(.047+.039*progress)*drop.strength);
+    const x=drop.x+drop.side*(progress*r*.91+Math.sin(progress*8.1)*r*.24);
+    const y=drop.y+progress*scale*.14;
+    const h=drop.hue/60;
+    const k=n=>(n+h)%6;
+    const rgb=[5,3,1].map(n=>.96-.84*Math.max(0,Math.min(k(n),4-k(n),1)));
+    for(let j=Math.max(1,Math.floor(y-r*2));j<Math.min(rows-1,y+r*2);j++){
+      for(let i=Math.max(1,Math.floor(x-r*2));i<Math.min(cols-1,x+r*2);i++){
+        const dx=(i-x)/r,dy=(j-y)/r,d=dx*dx+dy*dy;
+        if(d>4)continue;
+        const p=i+j*cols,weight=Math.exp(-2.3*d)*fade;
+        const amount=weight*dt*10*drop.strength;
+        for(let c=0;c<3;c++)dye[c][p]=Math.min(4,dye[c][p]+amount*(1-rgb[c]));
+        const ring=Math.exp(-.89*d)*fade;
+        u[p]+=(drop.side*.19+dx*.41-dy*.45*drop.side)*ring*dt*21;
+        v[p]+=(.65+dx*.46*drop.side+dy*.17)*ring*dt*19;
+      }
+    }
+  },
+  advect(source,target,loss,direction=1){
+    const {cols,rows,u,v}=this;
+    for(let y=1;y<rows-1;y++)for(let x=1;x<cols-1;x++){
+      const p=x+y*cols;
+      const bx=clamp(x-u[p]*direction*.28,.5,cols-1.5),by=clamp(y-v[p]*direction*.28,.5,rows-1.5);
+      const ix=Math.floor(bx),iy=Math.floor(by),fx=bx-ix,fy=by-iy,b=ix+iy*cols;
+      const a=source[b]+(source[b+1]-source[b])*fx;
+      const c=source[b+cols]+(source[b+cols+1]-source[b+cols])*fx;
+      target[p]=(a+(c-a)*fy)*loss;
+    }
+  },
+  movePigment(source,target){
+    const {cols,rows,u,v,reverse}=this;
+    this.advect(source,target,1);
+    this.advect(target,reverse,1,-1);
+    // Recover detail lost during interpolation without adding new color peaks.
+    for(let y=1;y<rows-1;y++)for(let x=1;x<cols-1;x++){
+      const p=x+y*cols;
+      const bx=Math.floor(clamp(x-u[p]*.28,.5,cols-1.5));
+      const by=Math.floor(clamp(y-v[p]*.28,.5,rows-1.5));
+      const i=bx+by*cols;
+      const a=source[i],b=source[i+1],c=source[i+cols],d=source[i+cols+1];
+      target[p]=clamp(target[p]+.5*(source[p]-reverse[p]),
+        Math.min(a,b,c,d),Math.max(a,b,c,d))*this.pigmentKeep;
+    }
+  },
+  moveWater(){
+    const {cols,rows,u,v,pressure,divergence,curl,dye}=this;
+    for(let y=1;y<rows-1;y++)for(let x=1;x<cols-1;x++){
+      const i=x+y*cols;
+      curl[i]=.5*(v[i+1]-v[i-1]-u[i+cols]+u[i-cols]);
+    }
+    for(let y=1;y<rows-1;y++)for(let x=1;x<cols-1;x++){
+      const i=x+y*cols;
+      const dx=Math.abs(curl[i+1])-Math.abs(curl[i-1]);
+      const dy=Math.abs(curl[i+cols])-Math.abs(curl[i-cols]);
+      const spin=curl[i]*.25/(Math.sqrt(dx*dx+dy*dy)+.001);
+      u[i]=clamp(u[i]+dy*spin,-3,3);
+      v[i]=clamp(v[i]-dx*spin+.017*Math.min(2,dye[0][i]+dye[1][i]+dye[2][i]),-3,3);
+    }
+    this.advect(u,this.uNext,.994);this.advect(v,this.vNext,.994);
+    [this.u,this.uNext]=[this.uNext,u];[this.v,this.vNext]=[this.vNext,v];
+
+    const nextU=this.u,nextV=this.v;
+    pressure.fill(0);
+    for(let y=1;y<rows-1;y++)for(let x=1;x<cols-1;x++){
+      const i=x+y*cols;
+      divergence[i]=.5*(nextU[i+1]-nextU[i-1]+nextV[i+cols]-nextV[i-cols]);
+    }
+    for(let pass=0;pass<9;pass++){
+      for(let y=1;y<rows-1;y++)for(let x=1;x<cols-1;x++){
+        const i=x+y*cols;
+        pressure[i]=(pressure[i-1]+pressure[i+1]+pressure[i-cols]+pressure[i+cols]-divergence[i])*.25;
+      }
+    }
+    for(let y=1;y<rows-1;y++)for(let x=1;x<cols-1;x++){
+      const i=x+y*cols;
+      nextU[i]-=.5*(pressure[i+1]-pressure[i-1]);
+      nextV[i]-=.5*(pressure[i+cols]-pressure[i-cols]);
+    }
+  },
+  step(dt){
+    this.time+=dt;
+    if(!this.wet)return;
+    this.quiet+=dt;
+    for(const drop of this.drops){
+      drop.age+=dt;
+      if(drop.age>=drop.fall)this.deposit(drop,dt);
+    }
+    this.drops=this.drops.filter(drop=>drop.age<drop.fall+.76);
+    this.moveWater();
+    for(let c=0;c<3;c++)this.movePigment(this.dye[c],this.dyeNext[c]);
+    [this.dye,this.dyeNext]=[this.dyeNext,this.dye];
+    if(this.quiet>75){this.wet=false;return}
+    this.draw();
+  },
+  draw(){
+    const {cols,rows,dye,pixels}=this;
+    g.globalCompositeOperation='source-over';
+    g.fillStyle='#fff';g.fillRect(0,0,W,H);
+    if(this.lastDrop<0)return;
+    const data=pixels.data;
+    const [red,green,blue]=dye;
+    for(let i=0;i<red.length;i++){
+      const p=i*4;
+      const density=red[i]+green[i]+blue[i];
+      if(density<.002){
+        data[p]=data[p+1]=data[p+2]=data[p+3]=255;
+        continue;
+      }
+      const up=i>=cols?i-cols:i,left=i%cols?i-1:i;
+      const relief=clamp((density-red[up]-green[up]-blue[up])*.59+
+        (density-red[left]-green[left]-blue[left])*.34,-.21,.18);
+      const light=1+relief*.9;
+      const spread=1.25+Math.min(1,density)*.23;
+      const shade=1-Math.min(.14,density*.05);
+      const transmission=d=>255*Math.exp(-d*spread)*light*shade;
+      data[p]=transmission(red[i]);data[p+1]=transmission(green[i]);data[p+2]=transmission(blue[i]);data[p+3]=255;
+    }
+    this.ctx.putImageData(pixels,0,0);
+    g.imageSmoothingQuality='medium';
+    g.drawImage(this.surface,0,0,W,H);
+    for(const drop of this.drops){
+      if(drop.age<0||drop.age>drop.fall+.22)continue;
+      const x=drop.x/cols*W,y=drop.y/rows*H;
+      const q=clamp(drop.age/drop.fall);
+      if(q<1){
+        const fall=46*(1-q*q),r=3+drop.strength*2.6;
+        g.fillStyle='hsl('+drop.hue+' 86% 46%)';
+        g.beginPath();g.ellipse(x,y-fall,r,r*(1.08+q*.27),0,0,Math.PI*2);g.fill();
+      }else{
+        const spread=clamp((drop.age-drop.fall)/.22);
+        g.strokeStyle='hsl('+drop.hue+' 80% 58% / '+((1-spread)*.47)+')';
+        g.lineWidth=1;
+        g.beginPath();g.ellipse(x,y,5+spread*27,1+spread*5,0,0,Math.PI*2);g.stroke();
+      }
+    }
+  },
+  resize(){
+    if(!this.dye||this.lastDrop<0){this.init();return}
+    const {cols,rows,dye,u,v,drops,time,lastDrop,quiet,wet}=this;
+    this.init();
+    const sx=this.cols/cols,sy=this.rows/rows;
+    for(let y=1;y<this.rows-1;y++)for(let x=1;x<this.cols-1;x++){
+      const to=x+y*this.cols,from=Math.floor(x/sx)+Math.floor(y/sy)*cols;
+      this.u[to]=u[from]*sx;this.v[to]=v[from]*sy;
+      for(let c=0;c<3;c++)this.dye[c][to]=dye[c][from];
+    }
+    for(const drop of drops){drop.x*=sx;drop.y*=sy}
+    Object.assign(this,{drops,time,lastDrop,quiet,wet});
+    this.draw();
+  }
+};
+
+/* Ink in water, Fable experiment. The same idea as the baseline (water motion carries pigment), but run on the
+   graphics card: pigment is tracked at roughly 25 times the baseline's detail, each cloud is poured slowly in
+   uneven pulses so it folds into sheets, and the result is lit as soft, opaque paint clouds on white water.
+   Add ?ink=cpu to the address to force the baseline for comparison. */
+const INK_GL={
+  fps:60,drops:[],swell:[],time:0,lastDrop:-2,quiet:0,wet:false,lost:false,seed:7,key:'',gl:null,P:null,
+  canvas:document.createElement('canvas'),
+  /* tuning: ink poured per frame, push given to fresh ink, how long water keeps moving, how long the push
+     travels with the ink, pigment fade, swirl strength, then four shading controls */
+  look:{size:1.45,ink:.065,swell:1,thrust:.0004,drift:.0006,drag:.992,carry:.995,fade:.99996,curl:.7,fine:.008,broad:.08,crease:.9,dense:4.5,pale:.28},
+  names:['dye','dye2','tmpA','tmpB','vel','vel2','curl','div','pr','pr2','half','quarter','blurA','blurB'],
+  rand(){let t=this.seed+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296},
+  r(a,b){return a+this.rand()*(b-a)},
+  /* Match the twelve note colors shown in the legend. */
+  tint(h,vividness=.85){
+    const hue=((h%360)+360)%360/60;
+    const light=.46,saturation=.3+.66*clamp(vividness);
+    const amplitude=saturation*Math.min(light,1-light);
+    return [0,8,4].map(offset=>{
+      const k=(offset+hue*2)%12;
+      return light-amplitude*Math.max(-1,Math.min(k-3,9-k,1));
+    });
+  },
+  boot(){
+    try{
+      const gl=this.canvas.getContext('webgl2',{alpha:false,antialias:false,depth:false,stencil:false});
+      if(!gl||!(gl.getExtension('EXT_color_buffer_float')||gl.getExtension('EXT_color_buffer_half_float')))return false;
+      this.gl=gl;this.build();
+      const t=this.target(4,4),ok=gl.checkFramebufferStatus(gl.FRAMEBUFFER)===gl.FRAMEBUFFER_COMPLETE;
+      gl.deleteTexture(t.tex);gl.deleteFramebuffer(t.fbo);
+      if(!ok)return false;
+      this.canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();this.lost=true});
+      this.canvas.addEventListener('webglcontextrestored',()=>{this.lost=false;this.key='';for(const n of this.names)this[n]=null;this.build();this.init()});
+      return true;
+    }catch(e){console.warn('Graphics-card ink is unavailable, using the baseline.',e);return false}
+  },
+  build(){
+    const gl=this.gl;
+    const VS='#version 300 es\nout vec2 vUv;void main(){vec2 p=vec2(float((gl_VertexID<<1)&2),float(gl_VertexID&2));vUv=p;gl_Position=vec4(p*2.-1.,0.,1.);}';
+        const HEAD='#version 300 es\nprecision highp float;precision highp sampler2D;in vec2 vUv;out vec4 o;\n';
+    const NB='uniform vec2 uTexel;\n#define vL (vUv-vec2(uTexel.x,0.))\n#define vR (vUv+vec2(uTexel.x,0.))\n#define vT (vUv+vec2(0.,uTexel.y))\n#define vB (vUv-vec2(0.,uTexel.y))\n';
+    /* read the water's motion averaged over four neighboring cells; this removes a cell-sized zigzag the solver
+       can leave behind, which otherwise shows up as saw-toothed cloud edges */
+    const FLOW='uniform sampler2D uVel;uniform vec2 uScale,uHalf;vec2 flow(){return .25*(texture(uVel,vUv+uHalf).xy+texture(uVel,vUv-uHalf).xy+texture(uVel,vUv+vec2(uHalf.x,-uHalf.y)).xy+texture(uVel,vUv+vec2(-uHalf.x,uHalf.y)).xy);}\n';
+    const sh=(type,src)=>{const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);
+      if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(s));return s};
+    const vs=sh(gl.VERTEX_SHADER,VS);
+    const make=fs=>{const p=gl.createProgram();gl.attachShader(p,vs);gl.attachShader(p,sh(gl.FRAGMENT_SHADER,HEAD+fs));gl.linkProgram(p);
+      if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(p));return {p,u:{}}};
+    this.P={
+      /* carry a field along the water's motion */
+      advect:make(FLOW+'uniform sampler2D uSrc;uniform vec4 uKeep;void main(){o=texture(uSrc,vUv-flow()*uScale)*uKeep;}'),
+      /* pigment only: undo most of the blur that carrying introduces, without inventing new color peaks */
+      mac:make(FLOW+`uniform sampler2D uSrc,uFwd,uBack;uniform float uKeep;
+        void main(){
+          vec2 c=vUv-flow()*uScale,sz=vec2(textureSize(uSrc,0));
+          ivec2 i=ivec2(floor(c*sz-.5)),z=ivec2(0),m=ivec2(sz)-1;
+          vec4 a=texelFetch(uSrc,clamp(i,z,m),0),b=texelFetch(uSrc,clamp(i+ivec2(1,0),z,m),0),
+               e=texelFetch(uSrc,clamp(i+ivec2(0,1),z,m),0),f=texelFetch(uSrc,clamp(i+1,z,m),0);
+          vec4 v=texture(uFwd,vUv)+.5*(texture(uSrc,vUv)-texture(uBack,vUv));
+          o=clamp(v,min(min(a,b),min(e,f)),max(max(a,b),max(e,f)))*uKeep;
+          o*=min(1.,8./max(.001,o.a));
+        }`),
+      splat:make('uniform vec2 uPoint;uniform float uAspect,uRadius;uniform vec4 uValue;void main(){vec2 d=vUv-uPoint;d.x*=uAspect;o=uValue*exp(-dot(d,d)/(uRadius*uRadius));}'),
+      curl:make(NB+'uniform sampler2D uVel;void main(){o=vec4(.5*(texture(uVel,vR).y-texture(uVel,vL).y-texture(uVel,vT).x+texture(uVel,vB).x));}'),
+      /* strengthen small swirls, and let fresh ink push the water in the direction it was poured */
+      force:make(NB+`uniform sampler2D uVel,uCurl;uniform float uDt,uCurlPush,uTime,uDrift,uAspect;
+        void main(){
+          float l=abs(texture(uCurl,vL).x),r=abs(texture(uCurl,vR).x),t=abs(texture(uCurl,vT).x),b=abs(texture(uCurl,vB).x),c=texture(uCurl,vUv).x;
+          vec2 f=.5*vec2(t-b,r-l);f/=length(f)+1e-6;f*=uCurlPush*c;f.y=-f.y;
+          /* a very slow, ever-changing current keeps the clouds turning over after the pouring stops */
+          const float PI=3.14159265;vec2 q=vUv*PI;
+          float m1=cos(uTime*.05),m2=sin(uTime*.04),m3=.5*sin(uTime*.07+1.);
+          f+=uDrift*vec2(m1*sin(2.*q.x)*cos(q.y)+2.*m2*sin(q.x)*cos(2.*q.y)+2.*m3*sin(3.*q.x)*cos(2.*q.y),
+                         -(2.*m1*cos(2.*q.x)*sin(q.y)+m2*cos(q.x)*sin(2.*q.y)+3.*m3*cos(3.*q.x)*sin(2.*q.y))/uAspect)*PI;
+          vec4 v=texture(uVel,vUv);v.xy=clamp(v.xy+(f+v.zw)*uDt,-1.,1.);o=v;
+        }`),
+      /* the screen edges are walls, so ink stays in view */
+      div:make(NB+`uniform sampler2D uVel;
+        void main(){
+          vec2 c=texture(uVel,vUv).xy;
+          float l=texture(uVel,vL).x,r=texture(uVel,vR).x,t=texture(uVel,vT).y,b=texture(uVel,vB).y;
+          if(vL.x<0.)l=-c.x;if(vR.x>1.)r=-c.x;if(vT.y>1.)t=-c.y;if(vB.y<0.)b=-c.y;
+          o=vec4(.5*(r-l+t-b));
+        }`),
+      pres:make(NB+'uniform sampler2D uPres,uDiv;float pr(vec2 c){return texture(uPres,c).x;}void main(){o=vec4((pr(vL)+pr(vR)+pr(vT)+pr(vB)-texture(uDiv,vUv).x)*.25);}'),
+      grad:make(NB+'uniform sampler2D uVel,uPres;float pr(vec2 c){return texture(uPres,c).x;}void main(){vec4 v=texture(uVel,vUv);v.xy-=.5*vec2(pr(vR)-pr(vL),pr(vT)-pr(vB));o=v;}'),
+      copy:make('uniform sampler2D uSrc;void main(){o=texture(uSrc,vUv);}'),
+      blur:make('uniform sampler2D uSrc;uniform vec2 uStep;void main(){vec4 s=texture(uSrc,vUv);float w=1.;for(int i=1;i<5;i++){float k=exp(-float(i*i)/8.);vec2 d=uStep*float(i);s+=k*(texture(uSrc,vUv+d)+texture(uSrc,vUv-d));w+=2.*k;}o=s/w;}'),
+      /* turn pigment thickness into lit clouds: fine folds and broad billows tilt the surface toward or away from
+         a light at the upper left, creases darken, thin veils stay pale, and a blurred copy sits behind as depth */
+      show:make(`uniform sampler2D uDye,uBlur;uniform vec2 uPx,uBpx;uniform float uRes,uFine,uBroad,uCrease,uDense,uPale;
+        float hgt(float d){return .62*log(1.+2.2*d);}
+        float hash(vec2 p){return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453);}
+        void main(){
+          vec4 D=texture(uDye,vUv),B=texture(uBlur,vUv);
+          vec2 e=uPx*1.5,b=uBpx*2.;
+          vec2 gf=vec2(hgt(texture(uDye,vUv+vec2(e.x,0.)).a)-hgt(texture(uDye,vUv-vec2(e.x,0.)).a),
+                       hgt(texture(uDye,vUv+vec2(0.,e.y)).a)-hgt(texture(uDye,vUv-vec2(0.,e.y)).a))*uRes/3.;
+          vec2 gb=vec2(hgt(texture(uBlur,vUv+vec2(b.x,0.)).a)-hgt(texture(uBlur,vUv-vec2(b.x,0.)).a),
+                       hgt(texture(uBlur,vUv+vec2(0.,b.y)).a)-hgt(texture(uBlur,vUv-vec2(0.,b.y)).a))*uRes/32.;
+          vec3 n=normalize(vec3(-(gf*uFine+gb*uBroad),1.)),L=normalize(vec3(-.5,.62,.6));
+          float crease=clamp((B.a-D.a)*uCrease,-.6,.6);
+          float shade=clamp(smoothstep(-.25,.95,dot(n,L))-crease*.45,0.,1.);
+          vec3 alb=clamp(D.rgb/max(D.a,1e-4),0.,1.);
+          vec3 body=mix(alb*mix(vec3(1.),alb,.75)*.86,mix(alb,vec3(1.),uPale),shade);
+          body+=pow(max(dot(n,normalize(L+vec3(0.,0.,1.))),0.),30.)*.1;
+          vec3 back=mix(clamp(B.rgb/max(B.a,1e-4),0.,1.),vec3(1.),.2);
+          vec3 col=mix(vec3(1.),back,(1.-exp(-2.*B.a))*.7);
+          col=mix(col,body,1.-exp(-uDense*D.a));
+          o=vec4(col+(hash(gl_FragCoord.xy)-.5)/255.,1.);
+        }`)
+    };
+  },
+  target(w,h){
+    const gl=this.gl,tex=gl.createTexture(),fbo=gl.createFramebuffer();
+    gl.bindTexture(gl.TEXTURE_2D,tex);
+    for(const [k,v] of [[gl.TEXTURE_MIN_FILTER,gl.LINEAR],[gl.TEXTURE_MAG_FILTER,gl.LINEAR],[gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE],[gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE]])gl.texParameteri(gl.TEXTURE_2D,k,v);
+    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA16F,w,h,0,gl.RGBA,gl.HALF_FLOAT,null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER,fbo);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,tex,0);
+    gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);
+    return {tex,fbo,w,h};
+  },
+  run(p,to,u){
+    const gl=this.gl;gl.useProgram(p.p);let unit=0;
+    for(const k in u){
+      if(!(k in p.u))p.u[k]=gl.getUniformLocation(p.p,k);
+      const l=p.u[k],v=u[k];if(l===null)continue;
+      if(v.tex){gl.activeTexture(gl.TEXTURE0+unit);gl.bindTexture(gl.TEXTURE_2D,v.tex);gl.uniform1i(l,unit++)}
+      else if(v.length===2)gl.uniform2f(l,v[0],v[1]);
+      else if(v.length===4)gl.uniform4f(l,v[0],v[1],v[2],v[3]);
+      else gl.uniform1f(l,v);
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER,to?to.fbo:null);
+    gl.viewport(0,0,to?to.w:this.canvas.width,to?to.h:this.canvas.height);
+    gl.drawArrays(gl.TRIANGLES,0,3);
+  },
+  flip(n){const m=n+'2';[this[n],this[m]]=[this[m],this[n]]},
+  /* add a soft round dab of something (pigment or push) at one place; r is a fraction of the screen height */
+  splat(to,x,y,r,value){
+    const gl=this.gl,rx=r*3/this.aspect,ry=r*3;
+    gl.enable(gl.BLEND);gl.blendFunc(gl.ONE,gl.ONE);gl.enable(gl.SCISSOR_TEST);
+    gl.scissor(Math.floor((x-rx)*to.w),Math.floor((y-ry)*to.h),Math.ceil(2*rx*to.w)+1,Math.ceil(2*ry*to.h)+1);
+    this.run(this.P.splat,to,{uPoint:[x,y],uAspect:this.aspect,uRadius:r,uValue:value});
+    gl.disable(gl.BLEND);gl.disable(gl.SCISSOR_TEST);
+  },
+  init(){
+    const gl=this.gl;this.aspect=W/H||1;
+    this.drops=[];this.time=0;this.lastDrop=-2;this.quiet=0;this.wet=false;
+    /* a hidden or zero-size window has nothing to draw on; wait for the next resize */
+    if(this.lost||!W||!H){this.draw();return}
+    const k=Math.min(1,1920/Math.max(cv.width,cv.height)),cw=Math.round(cv.width*k),ch=Math.round(cv.height*k);
+    const ds=Math.min(1,1280/Math.max(cw,ch)),dw=Math.round(cw*ds),dh=Math.round(ch*ds);
+    const ss=320/Math.max(W,H),sw=Math.max(32,Math.round(W*ss)),shh=Math.max(32,Math.round(H*ss));
+    const key=[cw,ch,dw,dh,sw,shh].join();
+    if(key!==this.key){
+      this.key=key;this.canvas.width=cw;this.canvas.height=ch;
+      for(const n of this.names){const t=this[n];if(t){gl.deleteTexture(t.tex);gl.deleteFramebuffer(t.fbo)}}
+      const size={dye:[dw,dh],dye2:[dw,dh],tmpA:[dw,dh],tmpB:[dw,dh],half:[dw>>1,dh>>1],quarter:[dw>>2,dh>>2],blurA:[dw>>3,dh>>3],blurB:[dw>>3,dh>>3]};
+      for(const n of this.names){const s=size[n]||[sw,shh];this[n]=this.target(Math.max(2,s[0]),Math.max(2,s[1]))}
+    }else for(const n of this.names){gl.bindFramebuffer(gl.FRAMEBUFFER,this[n].fbo);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT)}
+    this.draw();
+  },
+  /* one cloud: x and y are 0..1 from the top left, angle is the pour direction in radians away from straight down */
+  release(x,y,hue,strength=1,delay=0,angle,vividness=.85){
+    if(angle===undefined)angle=this.r(-2.3,2.3);
+    this.drops.push({x:clamp(x,.02,.98),y:1-clamp(y,.02,.98),hue,vividness,strength,age:-delay,life:mode==='fade'?3.8+strength:4.2+1.7*strength,
+      dx:Math.sin(angle),dy:-Math.cos(angle),ph:this.r(0,6.283)});
+    if(this.drops.length>28)this.drops.shift();
+    this.lastDrop=this.time;this.quiet=0;this.wet=true;
+  },
+  /* "Drop ink": a handful of new clouds spread across the width */
+  frame(F){
+    if(!F||F.energy<.035)return;
+    const live=this.drops.length,gap=(F.onset?.35:.85)*(1+live/12);
+    if(live>=18||this.time-this.lastDrop<gap)return;
+    const notes=F.notes.filter(n=>n.s>.22).slice(0,Math.min(4,18-live));
+    if(!notes.length)return;
+    for(const [i,note] of notes.entries()){
+      const x=this.r(.06,.94);
+      const y=clamp(yOf(note.midi)/H+this.r(-.25,.25),.06,.88);
+      const strength=.8+note.s*.75+F.energy*.5;
+      this.release(x,y,hueOf(note.pc),strength,i*.08,undefined,note.v);
+    }
+  },
+  /* pour one cloud for one frame: a push that wanders, plus two small uneven dabs of pigment so the cloud is
+     built from layers that the water can fold */
+  emit(d){
+    const K=this.look,q=d.age/d.life,s=d.strength,env=sstep(0,.12,q)*(1-sstep(.6,1,q)),A=this.aspect;
+    const turn=Math.sin(d.ph+d.age*.8)*.6,c=Math.cos(turn),n=Math.sin(turn);
+    const dx=d.dx*c-d.dy*n,dy=d.dx*n+d.dy*c,go=.08*s*q,x=d.x+d.dx*go/A,y=d.y+d.dy*go,rd=(.026+.017*s)*K.size;
+    this.splat(this.vel,x,y,rd*1.6,[0,0,dx*K.thrust*env,dy*K.thrust*env]);
+    for(let k=0;k<2;k++){
+      /* two nozzles circle slowly inside the cloud and pulse, so it grows as a cluster of rolling lobes */
+      const a=d.ph*(k?-1.7:1)+d.age*(k?-1.6:2.3)+this.r(-.5,.5),m=rd*(.55+.4*Math.sin(d.age*1.1+k*2))+rd*this.r(-.15,.15);
+      const beat=.35+.65*Math.pow(.5+.5*Math.sin(d.age*2.6+d.ph+k*2.4),2);
+      const amt=K.ink*env*this.r(.35,1.75),w=this.r(.72,1.12);
+      const t=this.tint(d.hue+this.r(-3,3),d.vividness);
+      const px=x+Math.cos(a)*m/A,py=y+Math.sin(a)*m;
+      this.splat(this.dye,px,py,rd*this.r(.3,.62),[t[0]*w*amt,t[1]*w*amt,t[2]*w*amt,amt]);
+      /* each dab also brings its own volume, so the cloud swells outward into lobes instead of only being dragged */
+      this.swell.push([px,py,rd*.6,-K.swell*env*beat/this.vel.h]);
+    }
+  },
+  step(){
+    const dt=1/60;this.time+=dt;
+    if(!this.wet||this.lost||!this.dye)return;
+    this.quiet+=dt;
+    const P=this.P,K=this.look,sc=[dt/this.aspect,dt],one=[1,1,1,1];
+    this.swell=[];
+    for(const d of this.drops){d.age+=dt;if(d.age>=0){this.emit(d);this.quiet=0}}
+    this.drops=this.drops.filter(d=>d.age<d.life);
+    const tx=[1/this.vel.w,1/this.vel.h],hf=[.5*tx[0],.5*tx[1]];
+    this.run(P.curl,this.curl,{uVel:this.vel,uTexel:tx});
+    this.run(P.force,this.vel2,{uVel:this.vel,uCurl:this.curl,uTexel:tx,uDt:dt,uCurlPush:K.curl,uTime:this.time,uDrift:K.drift,uAspect:this.aspect});this.flip('vel');
+    /* keep the water incompressible, which is what makes it roll and curl instead of piling up */
+    this.run(P.div,this.div,{uVel:this.vel,uTexel:tx});
+    /* swelling clouds need room: the same amount of clear water is drawn off evenly across the whole screen */
+    let room=0;
+    for(const w of this.swell){this.splat(this.div,w[0],w[1],w[2],[w[3],0,0,0]);room-=w[3]*Math.PI*w[2]*w[2]/this.aspect}
+    if(room)this.splat(this.div,.5,.5,1e3,[room,0,0,0]);
+    for(let i=0;i<18;i++){this.run(P.pres,this.pr2,{uPres:this.pr,uDiv:this.div,uTexel:tx});this.flip('pr')}
+    this.run(P.grad,this.vel2,{uVel:this.vel,uPres:this.pr,uTexel:tx});this.flip('vel');
+    this.run(P.advect,this.vel2,{uVel:this.vel,uSrc:this.vel,uScale:sc,uHalf:hf,uKeep:[K.drag,K.drag,K.carry,K.carry]});this.flip('vel');
+    this.run(P.advect,this.tmpA,{uVel:this.vel,uSrc:this.dye,uScale:sc,uHalf:hf,uKeep:one});
+    this.run(P.advect,this.tmpB,{uVel:this.vel,uSrc:this.tmpA,uScale:[-sc[0],-sc[1]],uHalf:hf,uKeep:one});
+    this.run(P.mac,this.dye2,{uVel:this.vel,uSrc:this.dye,uFwd:this.tmpA,uBack:this.tmpB,uScale:sc,uHalf:hf,uKeep:K.fade});this.flip('dye');
+    if(this.quiet>90){this.wet=false;return}
+    this.draw();
+  },
+  draw(){
+    g.globalCompositeOperation='source-over';
+    if(this.lastDrop<0||this.lost||!this.dye||!this.canvas.width||!this.canvas.height){g.fillStyle='#fff';g.fillRect(0,0,W,H);return}
+    const P=this.P,K=this.look,d=this.dye,b=this.blurB;
+    this.run(P.copy,this.half,{uSrc:d});
+    this.run(P.copy,this.quarter,{uSrc:this.half});
+    this.run(P.blur,this.blurA,{uSrc:this.quarter,uStep:[1/this.blurA.w,0]});
+    this.run(P.blur,b,{uSrc:this.blurA,uStep:[0,1/b.h]});
+    this.run(P.show,null,{uDye:d,uBlur:b,uPx:[1/d.w,1/d.h],uBpx:[1/b.w,1/b.h],uRes:d.h,uFine:K.fine,uBroad:K.broad,uCrease:K.crease,uDense:K.dense,uPale:K.pale});
+    g.imageSmoothingQuality='medium';
+    g.drawImage(this.canvas,0,0,W,H);
+  },
+  /* keep the picture when the window changes shape */
+  resize(){
+    if(this.lastDrop<0||this.lost||!this.dye){this.init();return}
+    const old=[this.dye,this.vel],keep={drops:this.drops,time:this.time,lastDrop:this.lastDrop,quiet:this.quiet,wet:this.wet};
+    this.dye=this.vel=null;this.key='';this.init();
+    this.run(this.P.copy,this.dye,{uSrc:old[0]});this.run(this.P.copy,this.vel,{uSrc:old[1]});
+    for(const t of old){this.gl.deleteTexture(t.tex);this.gl.deleteFramebuffer(t.fbo)}
+    Object.assign(this,keep);this.draw();
+  }
+};
+const INK=(!/[?&]ink=cpu\b/.test(location.search)&&INK_GL.boot())?INK_GL:INK_CPU;
+
+/* ---------- style 6: aurora. One folded curtain of light per note, drifting slowly with the melody ---------- */
+let AC=null,analyser=null,fbuf,bbuf,prevB,elSrc=null;
+let fluxAvg=0,lastOn=0;
+function ensureAC(){
+  if(!AC){
+    AC=new (window.AudioContext||window.webkitAudioContext)();
+    analyser=AC.createAnalyser();analyser.fftSize=8192;analyser.smoothingTimeConstant=.55;analyser.minDecibels=-100;analyser.maxDecibels=-10;
+    const mute=AC.createGain();mute.gain.value=0;analyser.connect(mute);mute.connect(AC.destination);
+    fbuf=new Float32Array(analyser.frequencyBinCount);bbuf=new Uint8Array(analyser.frequencyBinCount);prevB=new Uint8Array(analyser.frequencyBinCount);
+  }
+  if(AC.state==='suspended')AC.resume();
+}
+function analyse(now){
+  const F={notes:[],chroma:new Float32Array(12),energy:0,bass:0,bright:.5,onset:false,flux:0};
+  analyser.getFloatFrequencyData(fbuf);analyser.getByteFrequencyData(bbuf);
+  const hz=AC.sampleRate/analyser.fftSize,lo=Math.ceil(60/hz),hi=Math.min(fbuf.length-2,Math.floor(5000/hz)),top=Math.min(bbuf.length,Math.floor(9000/hz));
+  let flux=0,sum=0,bs=0,bn=0,cw=0;
+  for(let i=1;i<top;i++){const b=bbuf[i],d=b-prevB[i];if(d>0)flux+=d;prevB[i]=b;sum+=b;if(i*hz<160){bs+=b;bn++}cw+=b*Math.log2(i*hz)}
+  flux/=top*255;
+  let mx=-200;for(let i=lo;i<=hi;i++)if(fbuf[i]>mx)mx=fbuf[i];
+  F.energy=mx<-78?0:clamp(clamp((sum/(top*255)-.1)*2)*.5+clamp((mx+72)/50)*.6);
+  F.bass=clamp(bs/(bn*255)*1.25);
+  F.bright=sum?clamp((cw/sum-8.6)/2.6):.5;
+  if(flux>fluxAvg*1.6+.004&&now-lastOn>110&&F.energy>.05){F.onset=true;lastOn=now}
+  fluxAvg=fluxAvg*.93+flux*.07;
+  F.flux=clamp(flux*18);
+  if(mx<-78)return F;
+  const floor=mx-32,best=new Map();
+  for(let i=lo;i<=hi;i++){const v=fbuf[i];
+    if(v>floor&&v>fbuf[i-1]&&v>=fbuf[i+1]){const m=Math.round(69+12*Math.log2(i*hz/440)),s=(v-floor)/32;if(!(best.get(m)>=s))best.set(m,s)}}
+  let cm=0;
+  best.forEach((s,m)=>{F.notes.push({midi:m,pc:m%12,s,v:0});F.chroma[m%12]+=s;if(F.chroma[m%12]>cm)cm=F.chroma[m%12]});
+  if(cm)for(let i=0;i<12;i++)F.chroma[i]/=cm;
+  F.notes.sort((a,b)=>b.s-a.s);F.notes.length=Math.min(F.notes.length,6);
+  for(const n of F.notes)n.v=vivid(n,F);
+  return F;
+}
+
+let mode = 'fade';
+let file = null;
+let fileUrl = '';
+let demoUrl = '';
+let complete = false;
+let started = false;
+let fading = false;
+let starting = false;
+let output = null;
+const description = $('description');
+const play = $('play');
+const save = $('save');
+const say = message => { $('status').textContent = message; };
+const duration = 18;
+
+function buildDemo() {
+  const rate = 22050;
+  const samples = new Float32Array(rate * duration);
+  const chords = [[57,60,64,69],[53,57,60,65],[48,55,64,67],[55,59,62,71]];
+  // Separate attacks, a quiet gap, then overlapping notes to show both ink behaviors.
+  for (const [section, chord] of chords.entries()) {
+    for (const [voice, midi] of chord.entries()) {
+      const offset = Math.round(rate * (section * 4.25 + voice * (section < 2 ? .48 : .21)));
+      const length = Math.round(rate * (section === 0 ? 1.4 : 2.9));
+      const frequency = 440 * 2 ** ((midi - 69) / 12);
+      for (let i = 0; i < length && offset + i < samples.length; i++) {
+        const progress = i / length;
+        const envelope = Math.min(1, i / (rate * .028)) * (1 - progress) ** 1.8;
+        const phase = 2 * Math.PI * frequency * i / rate;
+        samples[offset + i] += envelope * (.16 * Math.sin(phase) + .038 * Math.sin(phase * 2));
+      }
+    }
+  }
+  const buffer = new ArrayBuffer(44 + samples.length * 2);
+  const wav = new DataView(buffer);
+  for (const [offset, word] of [[0,'RIFF'],[8,'WAVE'],[12,'fmt '],[36,'data']]) {
+    [...word].forEach((char, index) => wav.setUint8(offset + index, char.charCodeAt(0)));
+  }
+  wav.setUint32(4, buffer.byteLength - 8, true);
+  wav.setUint32(16, 16, true);
+  wav.setUint16(20, 1, true);
+  wav.setUint16(22, 1, true);
+  wav.setUint32(24, rate, true);
+  wav.setUint32(28, rate * 2, true);
+  wav.setUint16(32, 2, true);
+  wav.setUint16(34, 16, true);
+  wav.setUint32(40, samples.length * 2, true);
+  samples.forEach((sample, index) => wav.setInt16(44 + index * 2, Math.round(clamp(sample, -1, 1) * 32767), true));
+  return URL.createObjectURL(new Blob([buffer], {type:'audio/wav'}));
+}
+
+function sizeCanvas() {
+  const {width, height} = cv.getBoundingClientRect();
+  W = Math.max(1, width);
+  H = Math.max(1, height);
+  DPR = Math.min(devicePixelRatio || 1, 1.5);
+  cv.width = Math.round(W * DPR);
+  cv.height = Math.round(H * DPR);
+  g.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+
+function describe() {
+  description.textContent = complete
+    ? 'Your painting is ready to save.'
+    : mode === 'paint'
+      ? 'Clouds stay and layer into a finished painting.'
+      : 'Clouds slowly dissolve as new notes arrive.';
+}
+
+function syncUI() {
+  play.textContent = audio.paused
+    ? audio.ended ? 'Replay' : started ? 'Resume' : file ? 'Play song' : 'Play demo'
+    : 'Pause';
+  $('restart').hidden = !started;
+  $('demo').hidden = !file;
+  save.hidden = !complete;
+  const seconds = Math.floor(audio.currentTime || 0);
+  $('clock').textContent = Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0');
+}
+
+function reset() {
+  audio.pause();
+  if (audio.readyState) audio.currentTime = 0;
+  complete = started = fading = false;
+  prevB?.fill(0);
+  fluxAvg = lastOn = 0;
+  INK.seed = 7;
+  INK.pigmentKeep = mode === 'paint' ? 1 : .99;
+  INK_GL.look.fade = mode === 'paint' ? 1 : .994;
+  INK.init();
+  describe();
+  syncUI();
+}
+
+function selectFile(nextFile) {
+  reset();
+  if (fileUrl) URL.revokeObjectURL(fileUrl);
+  file = nextFile;
+  fileUrl = file ? URL.createObjectURL(file) : '';
+  if (fileUrl) audio.src = fileUrl;
+  else {
+    audio.removeAttribute('src');
+    audio.load();
+  }
+  $('track').textContent = file ? file.name : '18-second demo';
+  $('track').title = file ? file.name : '18-second demo';
+  syncUI();
+}
+
+async function togglePlayback() {
+  if (!audio.paused) {
+    audio.pause();
+    return;
+  }
+  if (starting) return;
+  starting = true;
+  play.disabled = true;
+  try {
+    if (audio.ended) reset();
+    if (!audio.getAttribute('src')) {
+      demoUrl ||= buildDemo();
+      audio.src = demoUrl;
+    }
+    ensureAC();
+    if (!elSrc) {
+      elSrc = AC.createMediaElementSource(audio);
+      output = AC.createGain();
+      output.gain.value = Number($('mute').getAttribute('aria-pressed') === 'false');
+      elSrc.connect(analyser);
+      elSrc.connect(output);
+      output.connect(AC.destination);
+    }
+    await audio.play();
+    started = true;
+  } catch (error) {
+    if (error.name !== 'AbortError') {
+      description.textContent = 'This audio could not play. Try the demo or an MP3 or WAV file.';
+      say(description.textContent);
+    }
+  } finally {
+    starting = false;
+    play.disabled = false;
+    syncUI();
+  }
+}
+
+document.querySelectorAll('input[name=mode]').forEach(input => {
+  input.addEventListener('change', () => {
+    mode = input.value;
+    reset();
+    say('Mode changed. The track is ready to play from the beginning.');
+  });
+});
+$('choose').addEventListener('click', () => $('file').click());
+$('file').addEventListener('change', event => {
+  const [nextFile] = event.target.files;
+  if (nextFile) selectFile(nextFile);
+  event.target.value = '';
+});
+$('demo').addEventListener('click', () => selectFile(null));
+$('mute').addEventListener('click', event => {
+  const button = event.currentTarget;
+  const muted = button.getAttribute('aria-pressed') === 'false';
+  button.setAttribute('aria-pressed', String(muted));
+  if (output) output.gain.value = muted ? 0 : 1;
+});
+play.addEventListener('click', togglePlayback);
+$('restart').addEventListener('click', () => { reset(); togglePlayback(); });
+for (const event of ['play','pause','timeupdate']) audio.addEventListener(event, syncUI);
+audio.addEventListener('ended', () => {
+  complete = mode === 'paint';
+  fading = mode === 'fade';
+  describe();
+  syncUI();
+  say(complete ? 'Painting complete. Save it as an image.' : 'The song has ended.');
+});
+save.addEventListener('click', () => {
+  cv.toBlob(blob => {
+    if (!blob) return;
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'the-sound-of-color-painting.png';
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  });
+});
+
+let resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    const still = complete ? document.createElement('canvas') : null;
+    if (still) {
+      still.width = cv.width;
+      still.height = cv.height;
+      still.getContext('2d').drawImage(cv, 0, 0);
+    }
+    sizeCanvas();
+    if (still) g.drawImage(still, 0, 0, W, H);
+    else INK.resize();
+  }, 120);
+});
+
+let lastFrame = 0;
+function loop(now) {
+  requestAnimationFrame(loop);
+  const interval = 1000 / (INK.fps || 36);
+  if (now - lastFrame < interval - 1 || complete || (audio.paused && !fading)) return;
+  lastFrame = now - (now - lastFrame) % interval;
+  if (!audio.paused && analyser) {
+    const frame = analyse(now);
+    // A chord can produce several clouds, but repeated octaves share the same color.
+    frame.notes = frame.notes.filter((note, index, notes) => notes.findIndex(other => other.pc === note.pc) === index);
+    INK.frame(frame);
+  }
+  INK.step(1 / 36);
+  if (fading && !INK.drops.length && INK.quiet > 10) {
+    fading = false;
+    INK.init();
+  }
+}
+sizeCanvas();
+reset();
+requestAnimationFrame(loop);
+})();
+</script>
+</html>

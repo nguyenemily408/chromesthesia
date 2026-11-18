@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Creator Lab — Chromesthesia</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+:root {
+  --wall: #080910;
+  --panel: #111119;
+  --ink: #fff2e3;
+  --ink-dim: #d1c4bb;
+  --line: #39333c;
+  --accent: #ffb99c;
+  --teal: #14baba;
+  --display: "Instrument Serif", Georgia, "Times New Roman", serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 14px; }
+body {
+  background: var(--wall);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.6;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+::selection { background: var(--accent); color: var(--wall); }
+
+/* ── Header ── */
+header {
+  padding: 32px 40px 24px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: baseline;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+h1 {
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: clamp(32px, 5vw, 52px);
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+h1 em { color: var(--accent); font-style: normal; }
+.back-link {
+  font-size: 12px;
+  color: var(--ink-dim);
+  text-decoration: none;
+  letter-spacing: 0.04em;
+  margin-left: auto;
+  white-space: nowrap;
+}
+.back-link:hover { color: var(--ink); }
+
+/* ── Main layout ── */
+main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  grid-template-rows: auto auto;
+  gap: 0;
+  max-width: 1100px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 40px 40px 60px;
+  align-items: start;
+}
+
+/* ── Animation panel (left column, full height) ── */
+.anim-col {
+  grid-row: 1 / 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  padding-right: 48px;
+}
+.canvas-wrap {
+  position: relative;
+  background: #0d0e18;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.canvas-wrap::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 50%, rgba(20,186,186,0.06) 0%, transparent 70%);
+  pointer-events: none;
+}
+#lottie-container {
+  width: 256px;
+  height: 256px;
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Controls ── */
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  width: 100%;
+  max-width: 380px;
+}
+button {
+  font: 500 12px/1 var(--mono);
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--line);
+  padding: 10px 14px;
+  cursor: pointer;
+  border-radius: 6px;
+  white-space: nowrap;
+  letter-spacing: 0.03em;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+button:hover { border-color: var(--ink); background: rgba(255,242,227,0.06); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button.active, button[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--wall);
+  border-color: var(--ink);
+}
+#btn-play { min-width: 80px; }
+.speed-group {
+  display: flex;
+  gap: 0;
+  margin-left: auto;
+}
+.speed-group button { border-radius: 0; }
+.speed-group button:first-child { border-radius: 6px 0 0 6px; }
+.speed-group button:last-child { border-radius: 0 6px 6px 0; }
+.speed-group button + button { border-left: 0; }
+.speed-group button.active { background: var(--teal); color: #000; border-color: var(--teal); }
+
+/* ── Info panel (right column) ── */
+.info-panel {
+  grid-column: 2;
+  grid-row: 1;
+  border-left: 1px solid var(--line);
+  padding-left: 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+.info-section h2 {
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: 22px;
+  letter-spacing: -0.01em;
+  margin-bottom: 16px;
+  line-height: 1.2;
+}
+.info-section h2 .label {
+  display: block;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+.detail-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.detail-row {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.detail-row dt {
+  color: var(--ink-dim);
+  letter-spacing: 0.03em;
+}
+.detail-row dd {
+  color: var(--ink);
+  font-family: var(--mono);
+}
+.detail-row dd code {
+  background: rgba(255,242,227,0.07);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-size: 11px;
+}
+
+/* ── What is Creator MCP ── */
+.what-box {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 20px;
+}
+.what-box p { font-size: 12px; color: var(--ink-dim); line-height: 1.65; }
+.what-box p + p { margin-top: 10px; }
+.what-box a { color: var(--accent); text-decoration: none; }
+.what-box a:hover { text-decoration: underline; }
+
+/* ── Color swatch ── */
+.swatch-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.1);
+  flex-shrink: 0;
+}
+
+/* ── Responsive ── */
+@media (max-width: 800px) {
+  header { padding: 20px 20px 16px; }
+  main {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+    padding: 24px 20px 48px;
+    gap: 32px;
+  }
+  .anim-col {
+    grid-row: 1;
+    padding-right: 0;
+  }
+  .info-panel {
+    grid-column: 1;
+    grid-row: 2;
+    border-left: none;
+    border-top: 1px solid var(--line);
+    padding-left: 0;
+    padding-top: 32px;
+  }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Creator <em>Lab</em></h1>
+  <a class="back-link" href="index.html">← Chromesthesia</a>
+</header>
+
+<main>
+  <!-- Left: animation + controls -->
+  <div class="anim-col">
+    <div class="canvas-wrap">
+      <div id="lottie-container"></div>
+    </div>
+
+    <div class="controls">
+      <button id="btn-play" aria-pressed="false">Pause</button>
+      <button id="btn-restart">Restart</button>
+      <div class="speed-group" role="group" aria-label="Playback speed">
+        <button class="speed-btn" data-speed="0.5" aria-label="Half speed">0.5×</button>
+        <button class="speed-btn active" data-speed="1" aria-label="Normal speed">1×</button>
+        <button class="speed-btn" data-speed="2" aria-label="Double speed">2×</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: info panel -->
+  <div class="info-panel">
+
+    <div class="info-section">
+      <h2>
+        <span class="label">Composition</span>
+        What Creator MCP built
+      </h2>
+      <dl class="detail-list">
+        <div class="detail-row">
+          <dt>Document</dt>
+          <dd><code>chromesthesia-creator-lab</code></dd>
+        </div>
+        <div class="detail-row">
+          <dt>Canvas</dt>
+          <dd>256 × 256 px</dd>
+        </div>
+        <div class="detail-row">
+          <dt>Frame rate</dt>
+          <dd>30 fps</dd>
+        </div>
+        <div class="detail-row">
+          <dt>Duration</dt>
+          <dd>2 s · 60 frames · seamless loop</dd>
+        </div>
+        <div class="detail-row">
+          <dt>Layer name</dt>
+          <dd><code>pulse</code> (group)</dd>
+        </div>
+        <div class="detail-row">
+          <dt>Shape</dt>
+          <dd>Ellipse · 100 × 100 px</dd>
+        </div>
+        <div class="detail-row">
+          <dt>Color</dt>
+          <dd>
+            <div class="swatch-row">
+              <div class="swatch" style="background:#14baba"></div>
+              <code>#14baba</code> — teal
+            </div>
+          </dd>
+        </div>
+      </dl>
+    </div>
+
+    <div class="info-section">
+      <h2>
+        <span class="label">Animation</span>
+        Scale keyframes
+      </h2>
+      <dl class="detail-list">
+        <div class="detail-row">
+          <dt>t = 0 s (frame 0)</dt>
+          <dd>scale 100 % · loop start</dd>
+        </div>
+        <div class="detail-row">
+          <dt>t = 1 s (frame 30)</dt>
+          <dd>scale 112 % · peak pulse</dd>
+        </div>
+        <div class="detail-row">
+          <dt>t = 2 s (frame 60)</dt>
+          <dd>scale 100 % · loop end</dd>
+        </div>
+        <div class="detail-row">
+          <dt>Peak growth</dt>
+          <dd>+12 % (1.0 → 1.12)</dd>
+        </div>
+        <div class="detail-row">
+          <dt>Easing</dt>
+          <dd>Ease-in-out · cubic-bezier(0.42, 0, 0.58, 1)</dd>
+        </div>
+        <div class="detail-row">
+          <dt>Property</dt>
+          <dd><code>PropertyType.Scale</code> on group</dd>
+        </div>
+        <div class="detail-row">
+          <dt>Format</dt>
+          <dd>Lottie JSON v5.7.0</dd>
+        </div>
+      </dl>
+    </div>
+
+    <div class="info-section">
+      <h2>
+        <span class="label">About</span>
+        Creator MCP
+      </h2>
+      <div class="what-box">
+        <p>
+          <strong style="color:var(--ink)">Creator MCP</strong> is a model context protocol server that lets an AI agent
+          build Lottie animations programmatically via the LottieFiles Creator API.
+          It exposes tools like <code style="font-size:11px">creator_exec</code> for running JavaScript against
+          a persistent composition document, <code style="font-size:11px">creator_preview</code> for live review,
+          and <code style="font-size:11px">creator_download_file</code> for fetching the exported JSON.
+        </p>
+        <p>
+          This animation was composed end-to-end by a Claude session: the composition was
+          created, keyframes were set with ease-in-out tangents, an 8-frame filmstrip
+          was rendered for verification, and the Lottie JSON was exported and saved —
+          all without touching any existing renderer code in the gallery.
+        </p>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  const anim = lottie.loadAnimation({
+    container: document.getElementById("lottie-container"),
+    renderer: "svg",
+    loop: true,
+    autoplay: true,
+    path: "creator-lab-animation.json"
+  });
+
+  let playing = true;
+
+  /* Play / Pause */
+  const btnPlay = document.getElementById("btn-play");
+  btnPlay.addEventListener("click", function () {
+    if (playing) {
+      anim.pause();
+      btnPlay.textContent = "Play";
+      btnPlay.setAttribute("aria-pressed", "true");
+    } else {
+      anim.play();
+      btnPlay.textContent = "Pause";
+      btnPlay.setAttribute("aria-pressed", "false");
+    }
+    playing = !playing;
+  });
+
+  /* Restart */
+  document.getElementById("btn-restart").addEventListener("click", function () {
+    anim.goToAndPlay(0, false);
+    playing = true;
+    btnPlay.textContent = "Pause";
+    btnPlay.setAttribute("aria-pressed", "false");
+  });
+
+  /* Speed */
+  document.querySelectorAll(".speed-btn").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      document.querySelectorAll(".speed-btn").forEach(function (b) {
+        b.classList.remove("active");
+      });
+      btn.classList.add("active");
+      anim.setSpeed(parseFloat(btn.dataset.speed));
+    });
+  });
+
+  /* Teal glow that tracks the pulse scale */
+  anim.addEventListener("enterFrame", function () {
+    const wrap = document.querySelector(".canvas-wrap");
+    const frame = anim.currentFrame;
+    const totalFrames = 60;
+    const t = frame / totalFrames;
+    /* sine-based glow that mirrors the scale 1.0→1.12→1.0 */
+    const glow = Math.sin(t * Math.PI);
+    const alpha = (0.04 + glow * 0.08).toFixed(3);
+    wrap.style.setProperty("--glow-a", alpha);
+    wrap.style.background =
+      "radial-gradient(circle at 50% 50%, rgba(20,186,186," + alpha + ") 0%, #0d0e18 70%)";
+  });
+}());
+</script>
+</body>
+</html>

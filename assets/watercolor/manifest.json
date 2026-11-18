@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "washes": [
+    "wash-01.png",
+    "wash-02.png",
+    "wash-03.png",
+    "wash-04.png",
+    "wash-05.png",
+    "wash-06.png",
+    "wash-07.png",
+    "wash-08.png",
+    "wash-09.png",
+    "wash-10.png",
+    "wash-11.png",
+    "wash-12.png",
+    "wash-13.png",
+    "wash-14.png",
+    "wash-15.png",
+    "wash-16.png"
+  ],
+  "edges": [
+    "edge-01.png",
+    "edge-02.png",
+    "edge-03.png",
+    "edge-04.png",
+    "edge-05.png",
+    "edge-06.png",
+    "edge-07.png",
+    "edge-08.png"
+  ],
+  "grain": [
+    "grain-01.png",
+    "grain-02.png",
+    "grain-03.png",
+    "grain-04.png"
+  ],
+  "paper": "paper.jpg"
+}

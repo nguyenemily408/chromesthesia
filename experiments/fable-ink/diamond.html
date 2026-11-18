@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Sound of Color · Diamond (local prototype)</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap">
+<style>
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;overflow:hidden}
+  body{font:15px/1.4 "Instrument Sans",system-ui,sans-serif;background:#0b0a10;color:#f2eef6}
+  body.light{background:#f4f1ec;color:#1d1424}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+  h1{position:fixed;left:24px;top:16px;margin:0;font:normal 1.5rem/1 "Instrument Serif",Georgia,serif;opacity:.85}
+  footer{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center;
+    background:rgba(255,255,255,.08);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border-radius:99px;padding:8px 12px;max-width:calc(100% - 24px)}
+  body.light footer{background:rgba(255,255,255,.75);box-shadow:0 6px 24px rgba(37,22,48,.12)}
+  button{font:inherit;color:inherit;cursor:pointer;border:1px solid rgba(255,255,255,.25);border-radius:99px;background:transparent;padding:5px 13px}
+  body.light button{border-color:rgba(29,20,36,.2)}
+  #play{background:#fff;color:#1d1424;border-color:#fff;min-width:6.5em}
+  body.light #play{background:#2b1e32;color:#fff;border-color:#2b1e32}
+  #info{font-size:.82rem;opacity:.7;min-width:11ch}
+  :focus-visible{outline:2px solid #b98cff;outline-offset:2px}
+</style>
+<canvas id="cv" role="img" aria-label="A slowly turning diamond whose flashes of color follow the music"></canvas>
+<h1>The Sound of <em>Color</em> · Diamond</h1>
+<footer aria-label="Playback">
+  <button type="button" id="play">Play demo</button>
+  <button type="button" id="choose">Choose a song</button>
+  <button type="button" id="mute" aria-pressed="false">Mute</button>
+  <button type="button" id="bg" aria-pressed="false">Light background</button>
+  <span id="info">18-second demo</span>
+  <input type="file" id="file" accept="audio/*,.mp3,.wav,.m4a,.ogg,.flac" hidden>
+  <audio id="audio" preload="metadata"></audio>
+</footer>
+<script>
+(() => {
+const $=id=>document.getElementById(id);
+const cv=$('cv'), g=cv.getContext('2d'), audio=$('audio');
+let W=0,H=0,DPR=1;
+const clamp=(x,a=0,b=1)=>Math.max(a,Math.min(b,x));
+const hueOf=pc=>((pc*7)%12)*30;
+function vivid(n,F){return clamp(n.s*.55+F.bright*.35+F.energy*.25+(n.midi>72?.1:0)-(n.midi<50?.28:0))}
+const duration=18;
+
+/* ---------- music analysis and built-in demo, copied unchanged from ink.html ---------- */
+let AC=null,analyser=null,fbuf,bbuf,prevB,elSrc=null;
+let fluxAvg=0,lastOn=0;
+function ensureAC(){
+  if(!AC){
+    AC=new (window.AudioContext||window.webkitAudioContext)();
+    analyser=AC.createAnalyser();analyser.fftSize=8192;analyser.smoothingTimeConstant=.55;analyser.minDecibels=-100;analyser.maxDecibels=-10;
+    const mute=AC.createGain();mute.gain.value=0;analyser.connect(mute);mute.connect(AC.destination);
+    fbuf=new Float32Array(analyser.frequencyBinCount);bbuf=new Uint8Array(analyser.frequencyBinCount);prevB=new Uint8Array(analyser.frequencyBinCount);
+  }
+  if(AC.state==='suspended')AC.resume();
+}
+function analyse(now){
+  const F={notes:[],chroma:new Float32Array(12),energy:0,bass:0,bright:.5,onset:false,flux:0};
+  analyser.getFloatFrequencyData(fbuf);analyser.getByteFrequencyData(bbuf);
+  const hz=AC.sampleRate/analyser.fftSize,lo=Math.ceil(60/hz),hi=Math.min(fbuf.length-2,Math.floor(5000/hz)),top=Math.min(bbuf.length,Math.floor(9000/hz));
+  let flux=0,sum=0,bs=0,bn=0,cw=0;
+  for(let i=1;i<top;i++){const b=bbuf[i],d=b-prevB[i];if(d>0)flux+=d;prevB[i]=b;sum+=b;if(i*hz<160){bs+=b;bn++}cw+=b*Math.log2(i*hz)}
+  flux/=top*255;
+  let mx=-200;for(let i=lo;i<=hi;i++)if(fbuf[i]>mx)mx=fbuf[i];
+  F.energy=mx<-78?0:clamp(clamp((sum/(top*255)-.1)*2)*.5+clamp((mx+72)/50)*.6);
+  F.bass=clamp(bs/(bn*255)*1.25);
+  F.bright=sum?clamp((cw/sum-8.6)/2.6):.5;
+  if(flux>fluxAvg*1.6+.004&&now-lastOn>110&&F.energy>.05){F.onset=true;lastOn=now}
+  fluxAvg=fluxAvg*.93+flux*.07;
+  F.flux=clamp(flux*18);
+  if(mx<-78)return F;
+  const floor=mx-32,best=new Map();
+  for(let i=lo;i<=hi;i++){const v=fbuf[i];
+    if(v>floor&&v>fbuf[i-1]&&v>=fbuf[i+1]){const m=Math.round(69+12*Math.log2(i*hz/440)),s=(v-floor)/32;if(!(best.get(m)>=s))best.set(m,s)}}
+  let cm=0;
+  best.forEach((s,m)=>{F.notes.push({midi:m,pc:m%12,s,v:0});F.chroma[m%12]+=s;if(F.chroma[m%12]>cm)cm=F.chroma[m%12]});
+  if(cm)for(let i=0;i<12;i++)F.chroma[i]/=cm;
+  F.notes.sort((a,b)=>b.s-a.s);F.notes.length=Math.min(F.notes.length,6);
+  for(const n of F.notes)n.v=vivid(n,F);
+  return F;
+}
+
+
+function buildDemo() {
+  const rate = 22050;
+  const samples = new Float32Array(rate * duration);
+  const chords = [[57,60,64,69],[53,57,60,65],[48,55,64,67],[55,59,62,71]];
+  // Separate attacks, a quiet gap, then overlapping notes to show both ink behaviors.
+  for (const [section, chord] of chords.entries()) {
+    for (const [voice, midi] of chord.entries()) {
+      const offset = Math.round(rate * (section * 4.25 + voice * (section < 2 ? .48 : .21)));
+      const length = Math.round(rate * (section === 0 ? 1.4 : 2.9));
+      const frequency = 440 * 2 ** ((midi - 69) / 12);
+      for (let i = 0; i < length && offset + i < samples.length; i++) {
+        const progress = i / length;
+        const envelope = Math.min(1, i / (rate * .028)) * (1 - progress) ** 1.8;
+        const phase = 2 * Math.PI * frequency * i / rate;
+        samples[offset + i] += envelope * (.16 * Math.sin(phase) + .038 * Math.sin(phase * 2));
+      }
+    }
+  }
+  const buffer = new ArrayBuffer(44 + samples.length * 2);
+  const wav = new DataView(buffer);
+  for (const [offset, word] of [[0,'RIFF'],[8,'WAVE'],[12,'fmt '],[36,'data']]) {
+    [...word].forEach((char, index) => wav.setUint8(offset + index, char.charCodeAt(0)));
+  }
+  wav.setUint32(4, buffer.byteLength - 8, true);
+  wav.setUint32(16, 16, true);
+  wav.setUint16(20, 1, true);
+  wav.setUint16(22, 1, true);
+  wav.setUint32(24, rate, true);
+  wav.setUint32(28, rate * 2, true);
+  wav.setUint16(32, 2, true);
+  wav.setUint16(34, 16, true);
+  wav.setUint32(40, samples.length * 2, true);
+  samples.forEach((sample, index) => wav.setInt16(44 + index * 2, Math.round(clamp(sample, -1, 1) * 32767), true));
+  return URL.createObjectURL(new Blob([buffer], {type:'audio/wav'}));
+}
+
+
+
+/* ---------- the stone: a round brilliant cut, 57 facets ----------
+   Rings from top to bottom: the flat table, the crown points, the girdle (widest edge), the pavilion points, and
+   the culet (bottom tip). y is up. */
+const V=[],FACETS=[];
+const ring=(r,y,n,off)=>{const s=V.length;for(let i=0;i<n;i++){const a=(i+off)/n*Math.PI*2;V.push([Math.cos(a)*r,y,Math.sin(a)*r])}return s};
+const T=ring(.56,.36,8,0),S=ring(.8,.2,8,.5),G=ring(1,0,16,0),L=ring(.47,-.5,8,.5),C=V.length;V.push([0,-.86,0]);
+const m8=i=>(i+8)%8,m16=i=>(i+16)%16;
+FACETS.push({v:[0,1,2,3,4,5,6,7].map(i=>T+i),kind:'table'});
+for(let i=0;i<8;i++){
+  FACETS.push({v:[T+i,T+m8(i+1),S+i],kind:'star'});
+  FACETS.push({v:[T+i,S+i,G+2*i,S+m8(i-1)],kind:'bezel'});
+  FACETS.push({v:[S+i,G+m16(2*i+1),G+2*i],kind:'girdle'},{v:[S+i,G+m16(2*i+2),G+m16(2*i+1)],kind:'girdle'});
+  FACETS.push({v:[C,L+m8(i-1),G+2*i,L+i],kind:'main'});
+  FACETS.push({v:[L+i,G+2*i,G+m16(2*i+1)],kind:'lower'},{v:[L+i,G+m16(2*i+1),G+m16(2*i+2)],kind:'lower'});
+}
+FACETS.forEach((f,k)=>{f.seed=(k*0.6180339887)%1});
+
+/* how strongly each of the twelve notes is sounding right now, and how vivid */
+const lev=new Float32Array(12),viv=new Float32Array(12);
+let spin=0,time=0,flash=0,energy=0,lightBg=false;
+
+function hear(F){
+  for(const n of F.notes){const l=n.s*(.35+.65*F.energy);if(l>lev[n.pc])lev[n.pc]=l;if(n.v>viv[n.pc])viv[n.pc]=n.v}
+  if(F.onset)flash=Math.min(1,flash+.5+F.flux*.5);
+  energy+=(F.energy-energy)*.1;
+}
+
+function draw(){
+  time+=1/60;
+  for(let i=0;i<12;i++){lev[i]*=.975;viv[i]*=.99}
+  /* the notes sounding now, strongest first: the stone splits the light into exactly these colors */
+  const live=[];for(let i=0;i<12;i++)if(lev[i]>.06)live.push(i);live.sort((a,b)=>lev[b]-lev[a]);
+  flash*=.92;if(audio.paused)energy*=.97;
+  /* the stone turns slowly; louder music turns it a little faster */
+  spin+=.0035+energy*.006;
+  const tilt=-.4+.08*Math.sin(time*.23),cy=Math.cos(spin),sy=Math.sin(spin),cx=Math.cos(tilt),sx=Math.sin(tilt);
+  const R=Math.min(W,H)*.34,ox=W/2,oy=H*.44;
+  /* the light swings slowly across the upper left */
+  const la=-.9+.5*Math.sin(time*.31),lx=Math.sin(la)*.75,ly=.62,lz=.55+.2*Math.cos(time*.2),ln=Math.hypot(lx,ly,lz);
+  const Lx=lx/ln,Ly=ly/ln,Lz=lz/ln,hx=Lx,hy=Ly,hz=Lz+1,hn=Math.hypot(hx,hy,hz);
+
+  g.globalCompositeOperation='source-over';
+  const bg=g.createRadialGradient(ox,oy,0,ox,oy,Math.max(W,H)*.7);
+  if(lightBg){bg.addColorStop(0,'#ffffff');bg.addColorStop(1,'#e6e1d9')}else{bg.addColorStop(0,'#1b1826');bg.addColorStop(1,'#08070c')}
+  g.fillStyle=bg;g.fillRect(0,0,W,H);
+  const add=lightBg?'source-over':'screen';
+
+  /* the beam of white light arriving from the upper left */
+  const bx=ox+Lx*R*3.4,by=oy-Ly*R*3.4;
+  const beam=g.createLinearGradient(bx,by,ox,oy);
+  beam.addColorStop(0,lightBg?'rgba(255,255,255,0)':'rgba(255,255,255,0)');beam.addColorStop(1,'rgba(255,255,255,'+(lightBg?.5:.10+.1*flash).toFixed(3)+')');
+  g.globalCompositeOperation=add;g.fillStyle=beam;g.beginPath();g.moveTo(bx,by);g.lineTo(ox-R*.6,oy+R*.05);g.lineTo(ox+R*.5,oy-R*.4);g.closePath();g.fill();
+
+  const P=V.map(v=>{const x=v[0]*cy+v[2]*sy,z0=-v[0]*sy+v[2]*cy,y=(v[1]+.2)*cx-z0*sx,z=(v[1]+.2)*sx+z0*cx,k=3.6/(3.6-z);return [x,y,z,ox+x*R*k,oy-y*R*k]});
+  const list=FACETS.map(f=>{
+    const a=P[f.v[0]],b=P[f.v[1]],c=P[f.v[2]];
+    let nx=(b[1]-a[1])*(c[2]-a[2])-(b[2]-a[2])*(c[1]-a[1]),ny=(b[2]-a[2])*(c[0]-a[0])-(b[0]-a[0])*(c[2]-a[2]),nz=(b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]);
+    const m=Math.hypot(nx,ny,nz)||1;nx/=m;ny/=m;nz/=m;
+    let mx=0,my=0,mz=0,px=0,py=0;for(const i of f.v){mx+=P[i][0];my+=P[i][1];mz+=P[i][2];px+=P[i][3];py+=P[i][4]}
+    const q=f.v.length;mx/=q;my/=q;mz/=q;
+    if(nx*mx+ny*(my-.05)+nz*mz<0){nx=-nx;ny=-ny;nz=-nz}
+    const dif=Math.max(0,nx*Lx+ny*Ly+nz*Lz),sp=Math.pow(Math.max(0,(nx*hx+ny*hy+nz*hz)/hn),14);
+    /* dispersion: the angle between a facet and the light decides which note's color it throws back, so the
+       colors travel across the stone as it turns. A facet only lights up while its note is sounding. */
+    const N=live.length||1,pc=live.length?live[((Math.floor((dif*2.2+f.seed+time*.03)*N)%N)+N)%N]:0;
+    return {f,front:nz>0,z:mz,dif,sp,pc,cx:px/q,cy:py/q,fire:0};
+  }).sort((a,b)=>a.z-b.z);
+
+  for(const o of list){
+    g.beginPath();for(const i of o.f.v)g.lineTo(P[i][3],P[i][4]);g.closePath();
+    const fr=o.front?1:.45;
+    /* the clear stone itself: cool greys that brighten toward the light */
+    g.globalCompositeOperation='source-over';
+    const x0=P[o.f.v[0]][3],y0=P[o.f.v[0]][4],body=g.createLinearGradient(x0,y0,o.cx*2-x0,o.cy*2-y0);
+    if(lightBg){const l=96-34*(1-o.dif);body.addColorStop(0,'hsla(225,18%,'+l+'%,'+(.55*fr)+')');body.addColorStop(1,'hsla(225,22%,'+(l-14)+'%,'+(.7*fr)+')')}
+    else{const l=14+52*o.dif;body.addColorStop(0,'hsla(230,22%,'+(l+10)+'%,'+(.6*fr)+')');body.addColorStop(1,'hsla(235,30%,'+l+'%,'+(.75*fr)+')')}
+    g.fillStyle=body;g.fill();
+    /* fire: the note's color, strongest on facets turned toward the light */
+    const fire=o.fire=clamp(Math.sqrt(lev[o.pc])*(.45+1.1*o.dif+1.4*o.sp)*(1+.6*flash))*fr;
+    if(fire>.03){g.globalCompositeOperation=add;
+      const sat=78+22*viv[o.pc],lg=g.createLinearGradient(o.cx*2-x0,o.cy*2-y0,x0,y0);
+      lg.addColorStop(0,'hsla('+hueOf(o.pc)+','+sat+'%,'+(lightBg?52:55)+'%,'+(fire*.55).toFixed(3)+')');
+      lg.addColorStop(1,'hsla('+((hueOf(o.pc)+24)%360)+','+sat+'%,'+(lightBg?58:66)+'%,'+fire.toFixed(3)+')');
+      g.fillStyle=lg;g.fill()}
+    /* white brilliance where a facet mirrors the light straight at you */
+    if(o.sp>.05){g.globalCompositeOperation=add;g.fillStyle='rgba(255,255,255,'+(o.sp*.75*fr).toFixed(3)+')';g.fill()}
+    g.globalCompositeOperation='source-over';g.lineWidth=o.front?.8:.5;
+    g.strokeStyle=lightBg?'rgba(60,60,90,'+(o.front?.28:.1)+')':'rgba(235,235,255,'+(o.front?.16+.4*o.sp:.05).toFixed(3)+')';g.stroke();
+  }
+
+  /* colored rays leave the brightest facets, and the strongest glints throw a small star */
+  g.globalCompositeOperation=add;
+  const hot=list.filter(o=>o.front&&o.fire>.3).sort((a,b)=>b.fire-a.fire).slice(0,7),len=Math.max(W,H);
+  for(const o of hot){
+    let dx=o.cx-ox,dy=o.cy-oy;const d=Math.hypot(dx,dy)||1;dx/=d;dy/=d;const w=.035+.03*o.f.seed;
+    const ray=g.createLinearGradient(o.cx,o.cy,o.cx+dx*len*.7,o.cy+dy*len*.7);
+    ray.addColorStop(0,'hsla('+hueOf(o.pc)+',95%,'+(lightBg?55:62)+'%,'+(o.fire*(lightBg?.4:.3)).toFixed(3)+')');ray.addColorStop(1,'hsla('+hueOf(o.pc)+',95%,60%,0)');
+    g.fillStyle=ray;g.beginPath();g.moveTo(o.cx,o.cy);g.lineTo(o.cx+(dx-dy*w)*len,o.cy+(dy+dx*w)*len);g.lineTo(o.cx+(dx+dy*w)*len,o.cy+(dy-dx*w)*len);g.closePath();g.fill();
+  }
+  for(const o of list){if(!o.front||o.sp<.5)continue;
+    const r=R*(.05+.1*o.sp)*(.7+.6*flash);g.fillStyle='rgba(255,255,255,'+(.55*o.sp).toFixed(3)+')';g.beginPath();
+    for(let i=0;i<8;i++){const a=i/8*6.2832+.3,rr=i%2?r*.07:r;g.lineTo(o.cx+Math.cos(a)*rr,o.cy+Math.sin(a)*rr)}g.closePath();g.fill()}
+  g.globalCompositeOperation='source-over';
+}
+
+/* ---------- page ---------- */
+let demoUrl='',elOut=null,file=null;
+function sizeCanvas(){W=innerWidth||1;H=innerHeight||1;DPR=Math.min(devicePixelRatio||1,2);cv.width=Math.round(W*DPR);cv.height=Math.round(H*DPR);g.setTransform(DPR,0,0,DPR,0,0)}
+function sync(){$('play').textContent=audio.paused?(audio.currentTime&&!audio.ended?'Resume':file?'Play song':'Play demo'):'Pause'}
+async function toggle(){
+  if(!audio.paused){audio.pause();return}
+  if(!audio.getAttribute('src')){demoUrl=demoUrl||buildDemo();audio.src=demoUrl}
+  ensureAC();
+  if(!elSrc){elSrc=AC.createMediaElementSource(audio);elOut=AC.createGain();elOut.gain.value=Number($('mute').getAttribute('aria-pressed')==='false');elSrc.connect(analyser);elSrc.connect(elOut);elOut.connect(AC.destination)}
+  try{await audio.play()}catch(e){$('info').textContent='This audio could not play.'}
+  sync();
+}
+$('play').addEventListener('click',toggle);
+$('choose').addEventListener('click',()=>$('file').click());
+$('file').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;audio.pause();file=f;audio.src=URL.createObjectURL(f);$('info').textContent=f.name;e.target.value='';sync()});
+$('mute').addEventListener('click',e=>{const b=e.currentTarget,m=b.getAttribute('aria-pressed')==='false';b.setAttribute('aria-pressed',String(m));b.textContent=m?'Unmute':'Mute';if(elOut)elOut.gain.value=m?0:1});
+$('bg').addEventListener('click',e=>{lightBg=!lightBg;document.body.classList.toggle('light',lightBg);e.currentTarget.setAttribute('aria-pressed',String(lightBg));e.currentTarget.textContent=lightBg?'Dark background':'Light background'});
+for(const ev of ['play','pause','ended'])audio.addEventListener(ev,sync);
+addEventListener('resize',sizeCanvas);
+if(/[?&]bg=light\b/.test(location.search))$('bg').click();
+function loop(now){requestAnimationFrame(loop);if(!W||!H)return;if(!audio.paused&&analyser)hear(analyse(now));draw()}
+/* local experiment only: lets a tester light up notes without sound */
+window.__diamond={lev,viv,strike(pcs){for(const pc of pcs){lev[pc]=1;viv[pc]=.9}flash=1;energy=.6}};
+sizeCanvas();requestAnimationFrame(loop);
+})();
+</script>
+</html>
