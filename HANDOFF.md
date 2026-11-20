@@ -4,7 +4,13 @@ Updated November 20, 2026, Singapore time. Written by Codex for Emily and the ne
 
 This is the starting point for the current app. Older handoffs explain earlier experiments and can contain choices Emily has since changed. Read this file, `AGENTS.md`, and the latest entries in `AGENT-WORK.md` before editing. Check the actual files again before making changes.
 
-## Diamond brightness reversal — November 20
+## Current production: original Diamond lighting restored — November 20
+
+**LIVE:** https://soundofcolor.vercel.app/ and https://the-sound-of-color-demo.vercel.app/ now serve **b1053d1dc342b5c246e1c2c4c4134212ea4a6676**, branch **codex/diamond-original-colors-20261120**. Production **dpl_HnKNwU98gN1gURYhMVVZ7cuhDuAN** is READY on the existing demo project/team; both public aliases were verified. Immutable URL: https://the-sound-of-color-demo-611u8tw4k-sherry-bluejayfinas-projects.vercel.app/ .
+
+Emily rejected the stronger brightness and supplied the earlier “Original facets · darker black” screenshot. The original Diamond shader lighting, exposure, colored-light intensity and white edge lighting are restored. GLSL, material brightness and glow values exactly match `design-previews/diamond-dark-background-code-still.html`, the source of that reference. Only its darker black backdrop is kept relative to pre-brightness source 3688e35. Music still changes the facet colors; the screenshot is one illustrative color frame rather than a fixed palette for every song. Shape, animation, music mapping, pause fixes, labels and all other styles are untouched. Source and all eight rebuilt extension scripts passed syntax. Installed extension was not reloaded. Public in-app-browser check played real Vivaldi in Diamond/Rhythm to about 0:31, with the restored facet lighting on black and no console warnings/errors; Pause showed Resume. Screenshot: `design-previews/diamond-original-colors-public.png`. The demo was left paused. No full-song, physical-phone or every-filter retest for this narrow restoration.
+
+## Earlier Diamond reversal preparation — November 20
 
 Emily found the brighter animation too bright and requested reversing its colors. The original Diamond lighting/material values from source 3688e35 have been restored exactly, keeping only the darker-black backdrop. This means restoring the previous color intensity, exposure, ambient/key lighting and facet edge lighting; there is no hue inversion. Geometry, animation, music mapping and all other styles/controls are preserved. A narrow correction is being published to the existing public site; final receipt follows verification.
 
