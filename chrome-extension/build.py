@@ -21,7 +21,7 @@ files = [
     "bioluminescent-shore/music-wave-preview.html",
     "bioluminescent-shore/blender/serious/wave5.mp4",
 ]
-for folder in ("assets/home", "assets/watercolor", "experiments/aurora-norway/photos"):
+for folder in ("assets/home", "assets/watercolor", "assets/audio", "experiments/aurora-norway/photos"):
     files.extend(str(p.relative_to(PROJECT)) for p in (PROJECT / folder).iterdir() if p.is_file())
 
 def copy_page(source, target):

@@ -155,7 +155,7 @@
   .bar{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:6px}
   .stylepick{display:flex;min-width:0;align-items:center;gap:8px;padding:0 4px 0 7px}
   .stylepick:first-child{border-right:1px solid var(--line)}
-  .stylepick span{font-size:.72rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#7a7180}
+  .stylepick span{font-size:.72rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#7a7180;white-space:nowrap}
   .stylepick select{width:100%;min-width:0;border:0;background:#f3eff6;border-radius:9px;padding:7px 8px;font-weight:600}
   .stylepick select:focus-visible{outline:2px solid #6c4292;outline-offset:2px}
   #styleSel{min-width:11.8em}
@@ -201,7 +201,7 @@
   <h1>The Sound<br>of <em>Color</em></h1>
   <p>Watch music turn into art.</p>
   <div class="welcome-actions" id="welcome-actions">
-    <button type="button" class="go" id="wplay"><span id="wplaylabel">Play demo</span><small id="wsub">18-second track</small></button>
+    <button type="button" class="go" id="wplay"><span id="wplaylabel">Play demo</span><small id="wsub">Vivaldi · Winter</small></button>
     <button type="button" id="wchoose">Upload MP3<small>Choose a file from your device</small></button>
     <button type="button" id="wyoutube" hidden>Find a song<small id="wyoutube-hint">YouTube, Spotify or SoundCloud</small></button>
   </div>
@@ -219,16 +219,16 @@ if (location.protocol === 'file:') {
 <div class="top">
   <h1>The Sound of Color</h1>
   <div class="bar">
-    <label class="stylepick"><span>Style</span>
-      <select id="styleSel" aria-label="Visual style">
+    <label class="stylepick"><span>Art Style</span>
+      <select id="styleSel" aria-label="Art Style">
         <option value="livingWatercolor" selected>Living Watercolor</option>
         <option value="ink">Ink</option>
         <option value="glass">Diamond</option>
         <option value="aurora">Aurora over Norway</option>
       </select>
     </label>
-    <label class="stylepick"><span>Filter</span>
-      <select id="filterSel" aria-label="Music filter">
+    <label class="stylepick"><span>Follows</span>
+      <select id="filterSel" aria-label="Follows">
         <option value="notes" selected>Notes</option>
         <option value="pitch">Pitch</option>
         <option value="rhythm">Rhythm</option>
@@ -293,9 +293,10 @@ if (location.protocol === 'file:') {
   </div>
   <form id="youtube-form" hidden>
     <label for="youtube-url" id="music-link-label">Song link</label>
-    <input type="url" id="youtube-url" autocomplete="off" placeholder="https://…" required>
+    <input type="url" id="youtube-url" autocomplete="off" placeholder="https://…" aria-describedby="youtube-status" required>
     <button type="submit" class="music-primary">Use link</button>
   </form>
+  <p id="youtube-status" role="status"></p>
   <div id="youtube-handoff" hidden>
     <p>Play the video in the YouTube tab, then return here. Choose the YouTube tab in the sharing window and turn on <strong>Also share tab audio</strong>.</p>
     <button type="button" id="youtube-share" class="music-primary">Share tab audio</button>
@@ -310,7 +311,6 @@ if (location.protocol === 'file:') {
     <a id="spotify-open" class="music-action" href="https://open.spotify.com/" target="_blank" rel="noopener noreferrer">Open Spotify to copy a link</a>
     <small>Spotify plays a short preview unless you are signed in to Spotify in this browser.</small>
   </div>
-  <p id="youtube-status" role="status"></p>
   <div class="music-footer">
     <button type="button" id="music-back" hidden>Back</button>
     <button type="button" id="youtube-close">Close</button>
@@ -1219,7 +1219,7 @@ const LAYOUT={x:null,xs:.05,band:1,prog:0,size:1};
 let trigger='notes';
 const TRIGGER_NAMES={original:'Original watercolor',notes:'Notes',pitch:'Pitch',rhythm:'Rhythm',harmony:'Harmony'};
 
-/* the preferred demo (18 s) has known chords: Am, F, C, G, each lasting 4.25 s */
+/* Legacy synthetic test sequence; the Vivaldi demo uses the actual recording and live analysis. */
 const ORIG_CHORDS=[
   {name:'Am',root:9,minor:true, t:0,   pad:[57,60,64,69]},
   {name:'F', root:5,minor:false,t:4.25,pad:[53,57,60,65]},
@@ -1228,15 +1228,14 @@ const ORIG_CHORDS=[
 // Rhythm uses an accent's strength for the mark and cycles colors independently of pitch.
 const RHYTHM_COLORS = [6, 3, 10, 7];
 let rhythmAccent = 0, harmonyNow = null, prevT = 0;
-const demoLabel = () => '18-second demo';
+const demoLabel = () => 'Vivaldi — Winter';
 const liveClockLength = 24 * 60 * 60;
 const isDemo = () => !tabCapture && Boolean(demoUrl) && audio.getAttribute('src') === demoUrl;
 const playbackTime = () => tabCapture ? tabCapture.elapsed : audio.currentTime || 0;
-const playingMusic = () => tabCapture ? tabCapture.startedAt !== null : !audio.paused;
-const progress = () => clamp(playbackTime() / (tabCapture ? liveClockLength : isDemo() ? duration : audio.duration || duration));
+const playingMusic = () => tabCapture ? tabCapture.startedAt !== null && !tabCapture.artPaused : !audio.paused;
+const progress = () => clamp(playbackTime() / (tabCapture ? liveClockLength : audio.duration || duration));
 /* Ink always builds a painting; the fade-with-music choice was removed from the controls */
 const effectiveMode=()=>'paint';
-const timelineDriven=()=>isDemo()&&trigger==='harmony';
 
 /* Frames built from the demo's known events rather than from listening */
 function chordFrame(chords,t,prev){
@@ -1279,8 +1278,7 @@ function buildFrame(now){
   const t = playbackTime();
   let F;
   harmonyNow=null;
-  if(timelineDriven())F=chordFrame(ORIG_CHORDS,t,prevT);
-  else{
+  {
     F=analyse(now);
     if(trigger==='harmony'){
       const c=estimateChord(F);
@@ -1313,13 +1311,13 @@ function buildFrame(now){
 }
 
 function sourceInfo(){
-  const demo=isDemo();
   switch(trigger){
     case 'pitch':return {cls:'est',tag:'ESTIMATED',text:'Lower pitches land lower and higher pitches land higher, moving left to right as the song plays. Pitch is estimated from the sound.'};
-    case 'rhythm':return {cls:'est',tag:'ESTIMATED',text:'New marks follow sudden accents in the sound. Stronger accents make stronger marks.'};
-    case 'harmony':return demo
-      ?{cls:'demo',tag:'DEMO DATA',text:'The demo is written on Am, F, C and G, so the chords are known. Palette follows the chord.'}
-      :{cls:'est',tag:'ESTIMATED',text:'Chords are guessed from the audio and named only when the match is strong. They can be wrong. When unsure, note colors are shown.'};
+    case 'rhythm':return style === 'livingWatercolor'
+      ?{cls:'demo',tag:'SONG PROGRESS',text:'The gold-line watercolor unfolds as the song advances. This painting follows song progress rather than individual beats.'}
+      :style === 'aurora' ?{cls:'est',tag:'ESTIMATED',text:'Beats make the lights pulse. Soft beats give a gentle glow; stronger beats give a brighter pulse.'}
+      :{cls:'est',tag:'ESTIMATED',text:'New marks follow sudden accents in the sound. Stronger accents make stronger marks.'};
+    case 'harmony':return {cls:'est',tag:'ESTIMATED',text:'Chords are guessed from the audio and named only when the match is strong. They can be wrong. When unsure, note colors are shown.'};
     default:return null;
   }
 }
@@ -1339,14 +1337,14 @@ function renderColorKey(chord=null){
   const el=(tag,cls,css)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(css)n.style.cssText=css;n.setAttribute('aria-hidden','true');return n};
   const sep=()=>{const n=document.createElement('span');n.textContent='·';return n};
   // Picture keys: small drawings instead of sentences.
-  if (trigger === 'original') {
+  if (style === 'livingWatercolor' && trigger === 'rhythm') {
     const paper=stage=>{
       const p=el('span','paper');
       if(stage>0)p.append(el('b','','left:3px;top:4px;width:14px;height:12px;background:#7fb2ea'),el('b','','right:2px;top:2px;width:12px;height:11px;background:#ee8fb0'));
       if(stage>1)p.append(el('u'));
       return p;
     };
-    row.append('Song start',paper(0),'→',paper(1),'→',paper(2),'Song end');
+    row.append('Song start',paper(0),'→',paper(1),'→',paper(2),'Gold-line painting');
     key.scrollLeft = 0;
     return;
   }
@@ -1368,7 +1366,11 @@ function renderColorKey(chord=null){
     row.append('Hard hit');
   };
   if (style === 'aurora') {
-    if (trigger === 'rhythm') { hitScale('ripple'); key.scrollLeft = 0; return; }
+    if (trigger === 'rhythm') {
+      row.append('Soft beat = gentle glow · Strong beat = brighter pulse');
+      key.scrollLeft = 0;
+      return;
+    }
     // Aurora colors its lights by how high the sound is, not by note name.
     if (trigger === 'pitch') row.append('Low pitch', auroraRamp(), 'High pitch');
     else if (trigger === 'notes') row.append('Low note', auroraRamp(), 'High note');
@@ -1463,7 +1465,7 @@ function renderLegend(){
   }else if(trigger==='harmony'){L.id='legend';updateChordReadout()}
   $('foot').textContent = tabCapture ? 'Shared tab' : isDemo() ? 'Demo audio' : file ? 'Your file' : 'Local preview';
 }
-$('seek').addEventListener('input',()=>{const dur=isDemo()?duration:(audio.duration||0);if(dur){audio.currentTime=dur*$('seek').value/1000;prevT=audio.currentTime}});
+$('seek').addEventListener('input',()=>{const dur=audio.duration||(isDemo()?duration:0);if(dur){audio.currentTime=dur*$('seek').value/1000;prevT=audio.currentTime}});
 function downloadCanvas(name, message){
   const image = R.snapshot ? R.snapshot() : cv;
   if (!image) { say('The painting is not available yet.'); return; }
@@ -1482,9 +1484,9 @@ const LIVING = (() => {
   let previousPitch, lastPaintedNote, lastHeard = -Infinity;
   const pigments = Array.from({length: 12}, (_, pc) => noteRGB(pc).map(value => 1 - value));
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
-  const length = () => tabCapture ? 90 : isDemo() ? duration : (audio.duration || duration);
+  const length = () => tabCapture ? 90 : (audio.duration || duration);
   const originalDuration = 240;
-  const paintingProgress = () => trigger === 'original' && tabCapture
+  const paintingProgress = () => trigger === 'rhythm' && tabCapture
     ? clamp(playbackTime() / originalDuration) : progress();
   function resetMusic() {
     lastWash = lastHeard = -Infinity;
@@ -1495,7 +1497,7 @@ const LIVING = (() => {
     sequence = 0;
     resetMusic();
     if (!renderer) return;
-    const original = trigger === 'original';
+    const original = trigger === 'rhythm';
     const paintingDuration = tabCapture ? originalDuration : Math.min(originalDuration, length() * 2);
     renderer.start({
       duration: original ? paintingDuration : tabCapture ? liveClockLength : length(),
@@ -1525,7 +1527,8 @@ const LIVING = (() => {
     if (!renderer) return;
     if (audio.seeking) return;
     renderer.follow(paintingProgress());
-    if (trigger === 'original') return;
+    // Rhythm: the planned painting unfolds with the song, and each strong beat adds one short gold line.
+    if (trigger === 'rhythm') { if (F.onset) renderer.beat?.(clamp(F.flux)); return; }
     const lead = F.energy >= .035 ? F.notes[0] : null;
     if (!lead) return;
     const isNotes = trigger === 'notes';
@@ -1602,7 +1605,7 @@ const LIVING = (() => {
     seek() { renderer?.seek(paintingProgress()); resetMusic(); },
     play() { renderer?.play(); },
     pause() { renderer?.pause(); },
-    finish() { renderer?.follow(1); renderer?.pause(); },
+    finish() { renderer?.pause(); renderer?.follow(1); },
     snapshot() { return renderer?.snapshot(); }
   };
 })();
@@ -1671,43 +1674,8 @@ const description = $('description');
 const play = $('play');
 const save = $('save');
 const say = message => { $('status').textContent = message; };
-const duration = 18;
-
-function buildDemo() {
-  const rate = 22050;
-  const samples = new Float32Array(rate * duration);
-  const chords = [[57,60,64,69],[53,57,60,65],[48,55,64,67],[55,59,62,71]];
-  // Separate attacks, a quiet gap, then overlapping notes to show both ink behaviors.
-  for (const [section, chord] of chords.entries()) {
-    for (const [voice, midi] of chord.entries()) {
-      const offset = Math.round(rate * (section * 4.25 + voice * (section < 2 ? .48 : .21)));
-      const length = Math.round(rate * (section === 0 ? 1.4 : 2.9));
-      const frequency = 440 * 2 ** ((midi - 69) / 12);
-      for (let i = 0; i < length && offset + i < samples.length; i++) {
-        const progress = i / length;
-        const envelope = Math.min(1, i / (rate * .028)) * (1 - progress) ** 1.8;
-        const phase = 2 * Math.PI * frequency * i / rate;
-        samples[offset + i] += envelope * (.16 * Math.sin(phase) + .038 * Math.sin(phase * 2));
-      }
-    }
-  }
-  const buffer = new ArrayBuffer(44 + samples.length * 2);
-  const wav = new DataView(buffer);
-  for (const [offset, word] of [[0,'RIFF'],[8,'WAVE'],[12,'fmt '],[36,'data']]) {
-    [...word].forEach((char, index) => wav.setUint8(offset + index, char.charCodeAt(0)));
-  }
-  wav.setUint32(4, buffer.byteLength - 8, true);
-  wav.setUint32(16, 16, true);
-  wav.setUint16(20, 1, true);
-  wav.setUint16(22, 1, true);
-  wav.setUint32(24, rate, true);
-  wav.setUint32(28, rate * 2, true);
-  wav.setUint16(32, 2, true);
-  wav.setUint16(34, 16, true);
-  wav.setUint32(40, samples.length * 2, true);
-  samples.forEach((sample, index) => wav.setInt16(44 + index * 2, Math.round(clamp(sample, -1, 1) * 32767), true));
-  return URL.createObjectURL(new Blob([buffer], {type:'audio/wav'}));
-}
+const duration = 205.56;
+const demoSource = '../../assets/audio/vivaldi-winter.mp3';
 
 function sizeCanvas() {
   const {width, height} = cv.getBoundingClientRect();
@@ -1720,8 +1688,9 @@ function sizeCanvas() {
 }
 
 function describe() {
-  description.textContent = complete ? 'Your painting is ready to save.' : LEAD[trigger];
-  $('subnote').textContent = complete ? '' : trigger === 'original' ? 'The song sets the pace of the original painting.'
+  description.textContent = complete ? 'Your painting is ready to save.' : style === 'livingWatercolor' && trigger === 'rhythm'
+    ? 'A watercolor with flowing gold lines' : LEAD[trigger];
+  $('subnote').textContent = complete ? '' : style === 'livingWatercolor' && trigger === 'rhythm' ? 'The song sets the pace of the gold-line painting.'
     : style === 'livingWatercolor' ? 'Living Watercolor: the music adds washes to wet paper.'
     : style === 'sh' ? 'Musical Shapes: forms arrive with each note, then recede.'
     : style === 'glass' ? (GLASS.ok ? 'Glass Diamond: the stone turns with the music and takes its colors from it.' : 'Glass Diamond is not available in this browser.')
@@ -1744,9 +1713,10 @@ function syncUI() {
   $('mute').hidden = Boolean(tabCapture);
   $('seek').hidden = Boolean(tabCapture);
   save.hidden = !complete;
-  const dur = tabCapture ? 0 : isDemo() ? duration : audio.duration || 0, cur = playbackTime();
+  const dur = tabCapture ? 0 : audio.duration || (isDemo() ? duration : 0), cur = playbackTime();
   const mmss = x => Math.floor(x / 60) + ':' + String(Math.floor(x % 60)).padStart(2, '0');
   $('clock').textContent = mmss(cur) + (dur ? ' / ' + mmss(dur) : '');
+  if (tabCapture?.artPaused && tabCapture.startedAt != null) $('clock').textContent += ' · Paused';
   if (document.activeElement !== $('seek')) $('seek').value = dur ? Math.round(1000 * cur / dur) : 0;
 }
 
@@ -1755,6 +1725,9 @@ function reset() {
   if (tabCapture) {
     tabCapture.startedAt = null;
     tabCapture.elapsed = 0;
+    tabCapture.clockAt = null;
+    tabCapture.silentAt = null;
+    tabCapture.artPaused = playerPaused === true;
   }
   document.body.classList.add('waiting-for-music');
   if (audio.readyState) audio.currentTime = 0;
@@ -1806,8 +1779,11 @@ function selectLocalSong(nextFile) {
     fileUrl = URL.createObjectURL(file);
     audio.src = fileUrl;
   } else {
-    demoUrl ||= buildDemo();
+    demoUrl ||= demoSource;
     audio.src = demoUrl;
+    $('mute').setAttribute('aria-pressed', 'false');
+    $('mute').textContent = 'Mute';
+    if (output) output.gain.value = 1;
   }
   AURORA.nextScene();
   reset();
@@ -1823,7 +1799,7 @@ function stopTabCapture() {
 
 function endTabPlayback() {
   if (!tabCapture) return;
-  const heardMusic = playingMusic();
+  const heardMusic = tabCapture.startedAt != null;
   stopTabCapture();
   removeMusicPlayers();
   quietAudioEngine();
@@ -1851,6 +1827,15 @@ const musicBack = $('music-back');
 const noTabAudioMessage = 'Tab audio sharing needs desktop Chrome or Edge. You can also play the demo or upload an MP3.';
 let musicService = '';
 
+function clearMusicLinkError() {
+  youtubeStatus.textContent = '';
+  musicLink.removeAttribute('aria-invalid');
+}
+function rejectMusicLink(message) {
+  youtubeStatus.textContent = message;
+  musicLink.setAttribute('aria-invalid', 'true');
+  musicLink.focus();
+}
 function showMusicServices() {
   const previous = musicService;
   musicService = '';
@@ -1858,7 +1843,7 @@ function showMusicServices() {
   musicServices.hidden = false;
   musicLinkForm.hidden = $('youtube-handoff').hidden = $('spotify-instructions').hidden = musicBack.hidden = true;
   musicLinkForm.reset();
-  youtubeStatus.textContent = '';
+  clearMusicLinkError();
   const buttons = Array.from(musicServices.querySelectorAll('button'));
   (buttons.find(button => button.dataset.musicService === previous) || buttons[0]).focus();
 }
@@ -1867,6 +1852,7 @@ musicServices.addEventListener('click', event => {
   const button = event.target.closest('[data-music-service]');
   if (!button) return;
   musicService = button.dataset.musicService;
+  clearMusicLinkError();
   const spotify = musicService === 'spotify';
   const label = {youtube: 'YouTube', soundcloud: 'SoundCloud', spotify: 'Spotify'}[musicService];
   $('youtube-title').textContent = label;
@@ -1881,7 +1867,7 @@ musicServices.addEventListener('click', event => {
   musicLink.focus();
 });
 musicBack.addEventListener('click', showMusicServices);
-musicLink.addEventListener('input', () => { youtubeStatus.textContent = ''; });
+musicLink.addEventListener('input', clearMusicLinkError);
 
 function openMusicDialog(event) {
   const opener = event.currentTarget;
@@ -1905,7 +1891,9 @@ function removeSoundCloud() {
   $('soundcloud-panel').hidden = true;
   embeddedService = '';
   playerLoaded = wantPlay = songStarted = false;
-  spotifySong = ''; spotifyPosition = 0;
+  playerSong = '';
+  playerPosition = 0;
+  playerPaused = null;
   clearTimeout(playRetry);
   clearTimeout(silenceCheck);
 }
@@ -1987,7 +1975,7 @@ function embedMusicPlayer(service, src) {
   // permission to ask. If it is declined, the Share button in the dock asks again.
   // The song starts by itself once that question is answered, so the artwork hears it from the start.
   playerLoaded = wantPlay = songStarted = false;
-  spotifySong = ''; spotifyPosition = 0;
+  playerSong = '';
   const startSong = () => {
     if (embeddedService !== service) return;
     wantPlay = true;
@@ -2023,6 +2011,7 @@ $('soundcloud-player').addEventListener('load', () => {
   // Ask YouTube's player to report back, so a video that refuses to play here can be explained.
   if (embeddedService === 'youtube') $('soundcloud-player').contentWindow.postMessage(
     JSON.stringify({event: 'listening', id: 1, channel: 'widget'}), 'https://www.youtube.com');
+  if (embeddedService === 'soundcloud') listenToSoundCloud();
   playEmbeddedSong();
 });
 window.addEventListener('message', event => {
@@ -2031,32 +2020,74 @@ window.addEventListener('message', event => {
   let data;
   try { data = JSON.parse(event.data); } catch { return; }
   if (data.event === 'onReady') playEmbeddedSong();
+  if (data.event === 'infoDelivery') {
+    if (data.info?.videoData?.video_id) playerSongReport('youtube:' + data.info.videoData.video_id);
+    if (Number.isInteger(data.info?.playerState)) playerPlaybackReport(data.info.playerState !== 1);
+  }
+  if (data.event === 'onStateChange' && Number.isInteger(data.info)) playerPlaybackReport(data.info !== 1);
   if (data.event === 'onError') {
     $('soundcloud-status').textContent = 'YouTube will not play this video inside the app. Click “Open on YouTube” to play it in a second tab instead.';
     $('player-newtab').classList.add('accent');
     $('player-newtab').textContent = 'Open on YouTube';
   }
 });
-// Spotify reports its current song. A new song or a restart begins a fresh painting;
-// pausing the same song keeps the painting, even through a long silent gap.
-let spotifySong = '', spotifyPosition = 0;
-function spotifySongReport(song, position = null) {
-  const changed = Boolean(spotifySong) && song !== spotifySong;
-  const startedOver = position != null && song === spotifySong && position < 1500 && spotifyPosition > position + 3000;
-  spotifySong = song;
-  if (changed) spotifyPosition = 0;
-  if (position != null) spotifyPosition = position;
+/* The players in the bottom bar report which song they are playing. A different song (the next one in a
+   playlist, or Next being clicked) or the same song started over means a new song, so the canvas starts
+   fresh. A pause of the same song keeps the painting. */
+let playerSong = '', playerPosition = 0, playerPaused = null;
+function tickCaptureClock(now) {
+  if (!tabCapture) return;
+  if (tabCapture.startedAt != null && !tabCapture.artPaused && tabCapture.clockAt != null) {
+    tabCapture.elapsed += Math.max(0, now - tabCapture.clockAt) / 1000;
+  }
+  tabCapture.clockAt = now;
+}
+function pauseSharedArtwork(paused, now = performance.now()) {
+  if (!tabCapture || tabCapture.artPaused === paused) return;
+  tickCaptureClock(now);
+  tabCapture.artPaused = paused;
+  if (R === LIVING) paused ? LIVING.pause() : LIVING.play();
+  if (R === AURORA) AURORA.setPlaying(!paused);
+  syncUI();
+  wake();
+}
+function playerPlaybackReport(paused) {
+  playerPaused = paused;
+  if (tabCapture?.startedAt != null) pauseSharedArtwork(paused);
+}
+function playerSongReport(song, position = null) {
+  const changed = Boolean(playerSong) && song !== playerSong;
+  const startedOver = position != null && song === playerSong && position < 1500 && playerPosition > position + 3000;
+  playerSong = song;
+  if (changed) playerPosition = 0;
+  if (position != null) playerPosition = position;
   if ((changed || startedOver) && tabCapture && tabCapture.startedAt != null) {
     AURORA.nextScene();
     reset();
   }
 }
 window.addEventListener('message', event => {
-  if (embeddedService !== 'spotify' || event.origin !== 'https://open.spotify.com' ||
-      event.source !== $('soundcloud-player').contentWindow) return;
-  const {playingURI, position} = event.data?.type === 'playback_update' ? event.data.payload || {} : {};
-  if (playingURI) spotifySongReport(playingURI, Number.isFinite(position) ? position : null);
+  if (event.source !== $('soundcloud-player').contentWindow) return;
+  if (event.origin === 'https://open.spotify.com' && embeddedService === 'spotify') {
+    const {playingURI, position, isPaused, isBuffering} = event.data?.type === 'playback_update' ? event.data.payload || {} : {};
+    if (playingURI) playerSongReport('spotify:' + playingURI, Number.isFinite(position) ? position : null);
+    if (typeof isPaused === 'boolean') playerPlaybackReport(isPaused || isBuffering === true);
+  } else if (event.origin === 'https://w.soundcloud.com' && embeddedService === 'soundcloud') {
+    let data;
+    try { data = JSON.parse(event.data); } catch { return; }
+    if (data.method === 'ready') listenToSoundCloud();
+    if (data.method === 'play') {
+      if (data.value?.soundId != null) playerSongReport('soundcloud:' + data.value.soundId);
+      playerPlaybackReport(false);
+    }
+    if (data.method === 'pause' || data.method === 'finish') playerPlaybackReport(true);
+  }
 });
+function listenToSoundCloud() {
+  for (const value of ['play', 'pause', 'finish']) {
+    $('soundcloud-player').contentWindow.postMessage(JSON.stringify({method: 'addEventListener', value}), 'https://w.soundcloud.com');
+  }
+}
 musicLinkForm.addEventListener('submit', event => {
   event.preventDefault();
   let url;
@@ -2066,8 +2097,15 @@ musicLinkForm.addEventListener('submit', event => {
   const invalidLink = isSoundCloud ? 'Paste a full SoundCloud track or playlist link.'
     : isSpotify ? 'Paste a Spotify song, album or playlist link. In Spotify, use Share → Copy link.'
     : 'Paste a YouTube video or playlist link.';
+  const appHosts = ['soundofcolor.vercel.app', 'the-sound-of-color-demo.vercel.app'];
+  if (url && (url.origin === location.origin || appHosts.includes(url.hostname))) {
+    rejectMusicLink(isSpotify
+      ? 'This link opens The Sound of Color. In Spotify, choose Share → Copy Song Link, then paste that link here.'
+      : 'This link opens The Sound of Color. Copy your song’s share link from ' + PLAYER_NAMES[musicService] + ' and paste it here.');
+    return;
+  }
   if (!url || url.protocol !== 'https:' || url.port || url.username || url.password) {
-    youtubeStatus.textContent = invalidLink;
+    rejectMusicLink(invalidLink);
     return;
   }
   if (isSoundCloud) {
@@ -2076,7 +2114,7 @@ musicLinkForm.addEventListener('submit', event => {
       url.hostname = 'soundcloud.com';
       embedSoundCloud(url);
     } else {
-      youtubeStatus.textContent = invalidLink;
+      rejectMusicLink(invalidLink);
     }
     return;
   }
@@ -2084,7 +2122,7 @@ musicLinkForm.addEventListener('submit', event => {
     const match = url.hostname === 'open.spotify.com' &&
       url.pathname.match(/^\/(?:intl-[a-z]{2}\/)?(?:embed\/)?(track|album|playlist)\/([A-Za-z0-9]{22})\/?$/);
     if (match) embedSpotify(match[1], match[2]);
-    else youtubeStatus.textContent = invalidLink;
+    else rejectMusicLink(invalidLink);
     return;
   }
 
@@ -2094,7 +2132,7 @@ musicLinkForm.addEventListener('submit', event => {
   const validVideo = /^[\w-]{11}$/.test(videoId || '');
   const validPlaylist = url.pathname === '/playlist' && /^[\w-]{10,}$/.test(url.searchParams.get('list') || '');
   if (!youtubeHosts.has(url.hostname) || (!validVideo && !validPlaylist)) {
-    youtubeStatus.textContent = invalidLink;
+    rejectMusicLink(invalidLink);
     return;
   }
   embedYouTube(validVideo ? videoId : '', url.searchParams.get('list') && /^[\w-]{10,}$/.test(url.searchParams.get('list')) ? url.searchParams.get('list') : '', url.href);
@@ -2156,7 +2194,7 @@ function connectMusicStream(stream, label = 'Listening to tab audio', monitor = 
   if (monitor) input.connect(AC.destination);
   stopTabCapture();
   clearLocalSong();
-  tabCapture = {stream, input, label, startedAt: null, elapsed: 0};
+  tabCapture = {stream, input, label, startedAt: null, elapsed: 0, clockAt: null, silentAt: null, artPaused: playerPaused === true};
   for (const track of stream.getTracks()) track.addEventListener('ended', () => {
     if (tabCapture?.stream === stream) endTabPlayback();
   }, {once: true});
@@ -2208,10 +2246,6 @@ async function togglePlayback() {
   play.disabled = true;
   try {
     if (audio.ended) reset();
-    if (demoUrl && audio.getAttribute('src') === demoUrl && audio.currentTime === 0) {
-      $('mute').setAttribute('aria-pressed', 'true');
-      if (output) output.gain.value = 0;
-    }
     ensureAC();
     if (!elSrc) {
       elSrc = AC.createMediaElementSource(audio);
@@ -2236,8 +2270,7 @@ async function togglePlayback() {
   }
 }
 
-/* until the visitor picks a style, each trigger opens in its suggested style; once they pick one, it stays */
-let styleChosen = false;
+/* Art style and Follows retain their selections independently. */
 /* restart the music after a change; if a restart is already under way, wait for it rather than giving up */
 function resume(source) {
   if (!source || audio.getAttribute('src') !== source || tabCapture) return;
@@ -2246,11 +2279,7 @@ function resume(source) {
 }
 $('styleSel').addEventListener('change', () => {
   const wasPlaying = !audio.paused;
-  style = $('styleSel').value; styleChosen = true;
-  if (style !== 'livingWatercolor' && trigger === 'original') {
-    trigger = 'notes';
-    mode = DEFAULTS.notes.mode;
-  }
+  style = $('styleSel').value;
   reset();
   if (wasPlaying) resume(audio.getAttribute('src'));
   if (tabCapture) { say('Style changed. Still listening to the shared tab.'); return; }
@@ -2259,7 +2288,6 @@ $('styleSel').addEventListener('change', () => {
 $('filterSel').addEventListener('change', () => {
   const wasPlaying = !audio.paused;
   trigger = $('filterSel').value;
-  if (!styleChosen) style = DEFAULTS[trigger].style;
   mode = DEFAULTS[trigger].mode;
   reset();
   if (wasPlaying) resume(audio.getAttribute('src'));
@@ -2281,6 +2309,7 @@ $('mute').addEventListener('click', event => {
   const button = event.currentTarget;
   const muted = button.getAttribute('aria-pressed') === 'false';
   button.setAttribute('aria-pressed', String(muted));
+  button.textContent = muted ? 'Unmute' : 'Mute';
   if (output) output.gain.value = muted ? 0 : 1;
 });
 play.addEventListener('click', togglePlayback);
@@ -2344,6 +2373,17 @@ window.addEventListener('resize', () => {
 });
 
 const NEW_SONG_GAP_MS = 1500;
+const RAW_SILENCE = .001;
+const SKIP_MIN_MS = 400, SKIP_MAX_MS = 3000;
+let rawSamples;
+function rawLevel() {
+  if (!rhythmAnalyser) return 0;
+  rawSamples ||= new Float32Array(rhythmAnalyser.fftSize);
+  rhythmAnalyser.getFloatTimeDomainData(rawSamples);
+  let sum = 0;
+  for (const sample of rawSamples) sum += sample * sample;
+  return Math.sqrt(sum / rawSamples.length);
+}
 let lastFrame = 0;
 function loop(now) {
   requestAnimationFrame(loop);
@@ -2352,28 +2392,56 @@ function loop(now) {
       (!tabCapture && (document.body.classList.contains('waiting-for-music') || (audio.paused && !fading)))) return;
   lastFrame = now - (now - lastFrame) % interval;
   if (tabCapture || (!audio.paused && analyser)) {
-    if (tabCapture?.startedAt != null) tabCapture.elapsed = (now - tabCapture.startedAt) / 1000;
+    tickCaptureClock(now);
     const frame = buildFrame(now);
     if (tabCapture && tabCapture.startedAt === null) {
-      if (frame.energy < .035) return;
+      if (frame.energy < .035 || playerPaused === true) return;
       tabCapture.startedAt = now;
+      tabCapture.clockAt = now;
+      tabCapture.artPaused = false;
       tabCapture.quietSince = null;
       showArtwork();
       wake();
     } else if (tabCapture) {
       /* A shared tab cannot tell the app when the next song starts. A silent gap followed by
          sound is treated as a new song: the canvas returns to its starting state first. */
-      if (frame.energy < .035) tabCapture.quietSince ??= now;
+      /* Pause rule (Emily, November 20): sound that stops abruptly is a pause, so the painting is kept when the
+         sound returns. Only a song that faded or rang out naturally is followed by a fresh canvas. "Abruptly"
+         means the last sound heard before the silence was still close to the music's recent loudness. The raw,
+         unsmoothed level is used so the answer does not depend on how fast this page is drawing. */
+      const raw = rawLevel();
+      if (raw < RAW_SILENCE) tabCapture.silentAt ??= now;
+      else tabCapture.silentAt = null;
+      if (raw >= RAW_SILENCE) {
+        tabCapture.lastRaw = [tabCapture.lastRaw?.[1] || 0, raw];
+        tabCapture.usual = tabCapture.usual == null ? raw : tabCapture.usual + (raw - tabCapture.usual) * Math.min(1, (now - (tabCapture.rawAt || now)) / 2000);
+        tabCapture.rawAt = now;
+        tabCapture.cut = false;
+      } else if (!tabCapture.cut && tabCapture.lastRaw) {
+        tabCapture.cut = true;
+        tabCapture.paused = Math.max(...tabCapture.lastRaw) >= .35 * tabCapture.usual;
+        tabCapture.lastRaw = null;
+      }
+      if (frame.energy < .035 || raw < RAW_SILENCE) tabCapture.quietSince ??= now;
       else {
         const gap = tabCapture.quietSince == null ? 0 : now - tabCapture.quietSince;
+        const paused = tabCapture.paused;
         tabCapture.quietSince = null;
-        // Spotify song messages handle Next/restart; silence in that player may be a pause.
-        if (gap >= NEW_SONG_GAP_MS && !(embeddedService === 'spotify' && spotifySong)) {
+        tabCapture.paused = false;
+        // When the player in the bottom bar reports its songs, sound alone never clears the canvas.
+        // Otherwise: a natural ending then silence is a new song, and so is an abrupt stop that is followed
+        // by sound again within a few seconds (a skipped song). A longer abrupt silence is a pause.
+        const skipped = paused && gap >= SKIP_MIN_MS && gap < SKIP_MAX_MS;
+        if (!(embeddedService && playerSong) && (skipped || (gap >= NEW_SONG_GAP_MS && !paused))) {
           AURORA.nextScene();
           reset();
           return;
         }
       }
+      // A reporting player gives exact pause/resume events. Other shared tabs settle after a short silence.
+      const silent = tabCapture.silentAt != null && now - tabCapture.silentAt >= 200;
+      pauseSharedArtwork(playerPaused === true || (playerPaused == null && silent), now);
+      if (tabCapture.artPaused) { syncUI(); return; }
     }
     R.frame(frame, playbackTime());
     updateChordReadout();
@@ -2462,7 +2530,7 @@ function backdrop() {
 }
 function syncWelcome() {
   $('wplaylabel').textContent = file ? 'Play your song' : 'Play demo';
-  $('wsub').textContent = file ? file.name : '18-second track';
+  $('wsub').textContent = file ? file.name : 'Vivaldi · Winter';
 }
 function leaveWelcome() {
   document.body.classList.remove('welcoming');

@@ -52,3 +52,12 @@ Address options do the same from the URL: `?dur=240&seed=7&gold=pitch&auto=0&ui=
 - Not checked: real music, phone browsers, Safari, PNG export through the app's Save painting button, a full real-time run since gold was added.
 - Trial options left in the page, off by default: `?look=pearl`, `?look=shift`, `?metals=mixed`, `?vein=from,to,spread`.
 - Earlier versions are kept beside the page as `watercolor_v1_backup.html` through `watercolor_v7_backup.html` (there is no v4). Nothing here is committed to git.
+
+## Added November 20 (after the app integration)
+
+- `beat(strength)`: one short gold line on existing paint for a strong beat, longer for a harder hit (strength 0 to 1). About 28 at most per song, never two within 0.4 seconds. Returns true when it painted. Meant for the app's Rhythm choice, which runs the built-in painting. The app calls it on each detected beat when Rhythm is chosen (since November 20).
+- Short songs: with `externalClock: true` and `auto: true`, the page simulates four times the `duration` it is given, up to 240 seconds, so short songs still get well-spread washes.
+- `watercolor_gold_lines_reference.html` and `.jpg` are a frozen copy of the page and the picture Emily approved. `watercolor_v8_backup.html` is the page just before these two additions.
+- The root `HANDOFF.md` is the current state of the app; this file only describes the watercolor page.
+
+- November 20, Codex pause fix: when embedded with externalClock, pause() drops pending catch-up steps and holds the current canvas. A subsequent follow()/seek() can explicitly set a new target; the app calls pause() before follow(1) on song completion. The standalone renderer’s normal clock is unchanged.

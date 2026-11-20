@@ -8,13 +8,13 @@ For the current full-screen preview with Living Watercolor and Aurora over Norwa
 python3 -m http.server 8792 --bind 127.0.0.1
 ```
 
-Open [the local web preview](http://127.0.0.1:8792/experiments/fable-ink/three-styles-full.html), then choose **Play demo** or **Upload MP3**. The style and filter controls appear when the canvas opens. Keep the project folders together so the preview can find its files.
+Open [the local web preview](http://127.0.0.1:8792/experiments/fable-ink/three-styles-full.html), then choose **Play demo** or **Upload MP3**. The **Art style** and **Follows** controls appear when the canvas opens and keep their selections independently. **Play demo** uses Vivaldi’s *Winter*; the page stays silent until Play. Living Watercolor following Rhythm uses the gold-line reference painting; Notes, Pitch and Harmony keep their audio-driven painting. These changes are approved for the current release; see HANDOFF.md for deployment status. Recording credits: [assets/audio/CREDITS.md](assets/audio/CREDITS.md). Keep the project folders together so the preview can find its files.
 
-On desktop, choose **Find a song** on the welcome screen or under **More**, then choose a service.
+On desktop, choose **Find a song** on the welcome screen or under **More**, then choose a service. Both entry points use the same steps. For Spotify, copy the song/album/playlist link using Spotify’s **Share** menu; the Sound of Color website address is not a song link. An incorrect link now shows guidance directly below the box.
 
-- **YouTube** opens a video or playlist link in a new tab. Play it there, return to The Sound of Color, and choose **Share tab audio**. Select the YouTube tab with **Also share tab audio** enabled.
-- **SoundCloud** loads a track or playlist link in the bottom player. Play it there, click **Share this tab’s audio**, and choose The Sound of Color with tab audio enabled. **Remove player** clears it.
-- **Spotify** opens the web player. Play a song in desktop Chrome, click **The Sound of Color** in Chrome’s extensions menu, and choose **Start visuals**. An installed copy of the local extension is needed.
+- **YouTube, SoundCloud and Spotify:** paste a supported song or playlist link and choose **Use link**. The service’s own player loads in the bottom bar and the app requests this tab’s audio. Choose the Sound of Color tab with audio sharing enabled. The player attempts to start; its own Play control remains available. Pause holds the artwork and its timer; Play resumes the same painting.
+- **YouTube fallback:** if a video refuses embedding, use **Open on YouTube**, play there, then share that tab’s audio. Some music videos refuse the localhost preview but work from the public site.
+- The free local extension remains an optional way to start visuals from a music tab.
 
 Website tab sharing requires desktop Chrome or Edge and the browser’s permission. **Stop listening** ends the share. On phones and tablets, use **Play demo** or **Upload MP3**. After choosing a file, press **Play your song**.
 
