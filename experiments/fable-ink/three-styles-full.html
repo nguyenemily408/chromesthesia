@@ -229,8 +229,7 @@ if (location.protocol === 'file:') {
     </label>
     <label class="stylepick"><span>Filter</span>
       <select id="filterSel" aria-label="Music filter">
-        <option value="original" selected>Original</option>
-        <option value="notes">Notes</option>
+        <option value="notes" selected>Notes</option>
         <option value="pitch">Pitch</option>
         <option value="rhythm">Rhythm</option>
         <option value="harmony">Harmony</option>
@@ -1216,7 +1215,8 @@ function analyse(now){
    ===================================================================================================== */
 /* Layout hints. Defaults leave every renderer exactly as it was. */
 const LAYOUT={x:null,xs:.05,band:1,prog:0,size:1};
-let trigger='original';
+// The Original watercolor filter was removed from the menu at Emily's request (November 20). Its code below is kept, unused, so it can be restored.
+let trigger='notes';
 const TRIGGER_NAMES={original:'Original watercolor',notes:'Notes',pitch:'Pitch',rhythm:'Rhythm',harmony:'Harmony'};
 
 /* the preferred demo (18 s) has known chords: Am, F, C, G, each lasting 4.25 s */
@@ -1777,7 +1777,6 @@ function reset() {
   if (R !== LIVING) LIVING.remove();
   if (R !== AURORA) AURORA.remove();
   $('styleSel').value = style;
-  $('filterSel').options[0].hidden = style !== 'livingWatercolor';
   $('filterSel').value = trigger;
   renderSource();
   renderLegend();
@@ -1905,8 +1904,9 @@ function removeSoundCloud() {
   $('soundcloud-player').removeAttribute('src');
   $('soundcloud-panel').hidden = true;
   embeddedService = '';
-  playerLoaded = wantPlay = false;
+  playerLoaded = wantPlay = songStarted = false;
   clearTimeout(playRetry);
+  clearTimeout(silenceCheck);
 }
 // YouTube's own small player in the bottom dock. Some videos refuse to play inside other
 // sites, so the dock keeps a button that falls back to the older separate-tab route.
@@ -1985,13 +1985,23 @@ function embedMusicPlayer(service, src) {
   // Ask for this tab's sound straight away, while the Use link click still counts as
   // permission to ask. If it is declined, the Share button in the dock asks again.
   // The song starts by itself once that question is answered, so the artwork hears it from the start.
-  playerLoaded = wantPlay = false;
-  const startSong = () => { if (embeddedService === service) { wantPlay = true; playEmbeddedSong(); } };
+  playerLoaded = wantPlay = songStarted = false;
+  const startSong = () => {
+    if (embeddedService !== service) return;
+    wantPlay = true;
+    playEmbeddedSong();
+    // If the artwork is listening but still hears nothing after a while, say why and how to fix it.
+    clearTimeout(silenceCheck);
+    silenceCheck = setTimeout(() => {
+      if (embeddedService !== service || !tabCapture || playingMusic()) return;
+      $('soundcloud-status').textContent = 'The artwork is listening but hears no sound. Check the player is playing and not muted. If it is, click Stop listening, then Share this tab’s audio, and keep “Also allow tab audio” switched on before you click Allow.';
+    }, 9000);
+  };
   if (canShareMusicTab) shareMusicTab(true).finally(startSong);
   else startSong();
 }
 // Presses play inside the loaded player, using each service's own published player messages.
-let playerLoaded = false, wantPlay = false, playRetry = 0;
+let playerLoaded = false, wantPlay = false, songStarted = false, playRetry = 0, silenceCheck = 0;
 function playEmbeddedSong() {
   clearTimeout(playRetry);
   const frame = $('soundcloud-player').contentWindow;
@@ -2001,6 +2011,7 @@ function playEmbeddedSong() {
     else if (embeddedService === 'youtube') frame.postMessage(JSON.stringify({event: 'command', func: 'playVideo', args: []}), 'https://www.youtube.com');
     else if (embeddedService === 'spotify') frame.postMessage({command: 'play'}, 'https://open.spotify.com');
   };
+  songStarted = true;
   if (embeddedService === 'spotify') playRetry = setTimeout(() => { send(); wantPlay = false; }, 900);
   else { send(); playRetry = setTimeout(() => { send(); wantPlay = false; }, 1500); }
 }
@@ -2081,7 +2092,8 @@ async function shareMusicTab(currentTab = false) {
     });
     const surface = stream.getVideoTracks()[0]?.getSettings().displaySurface;
     if ((surface && surface !== 'browser') || !stream.getAudioTracks().length) {
-      status.textContent = 'Choose the tab playing your song and turn on Also share tab audio.';
+      status.textContent = currentTab ? 'Chrome shared this tab without its sound. Click Share this tab’s audio again and switch on “Also allow tab audio” before you click Allow.'
+        : 'Choose the tab playing your song and turn on Also share tab audio.';
       return;
     }
     connectMusicStream(stream);
@@ -2106,7 +2118,13 @@ async function shareMusicTab(currentTab = false) {
   }
 }
 youtubeShare.addEventListener('click', () => shareMusicTab());
-$('soundcloud-share').addEventListener('click', () => shareMusicTab(true));
+// Sharing from the dock button also (re)starts the song, so nothing else needs pressing.
+// Spotify's play message restarts a song, so it is only sent if the song was never started.
+$('soundcloud-share').addEventListener('click', () => shareMusicTab(true).finally(() => {
+  if (!embeddedService || (embeddedService === 'spotify' && songStarted)) return;
+  wantPlay = true;
+  playEmbeddedSong();
+}));
 function connectMusicStream(stream, label = 'Listening to tab audio', monitor = false) {
   ensureAC();
   const input = AC.createMediaStreamSource(stream);
