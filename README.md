@@ -8,7 +8,11 @@ python3 -m http.server 8792 --bind 127.0.0.1
 
 Open [the local web preview](http://127.0.0.1:8792/experiments/fable-ink/three-styles-full.html), then choose **Play demo** or **Upload MP3**. The style and filter controls appear when the canvas opens. Keep the project folders together so the preview can find its files.
 
-In desktop Chrome or Edge, choose **Use YouTube link** on the welcome screen or **Play from YouTube** under **More**. Paste a YouTube video link, open it and press play. Return to The Sound of Color, click **Share tab audio**, choose the YouTube tab, and turn on **Also share tab audio**. Manage the song in YouTube. **Stop listening** ends the share. On phones and tablets, the music choices are **Play demo** and **Upload MP3**.
+In desktop Chrome or Edge, choose **Find a song** on the welcome screen or under **More**. Search for a song on YouTube or Spotify, paste a link, or use a tab you already have open. Play music in the browser tab, return to The Sound of Color, click **Share tab audio**, and select the playing tab with **Also share tab audio** enabled. If the service or browser does not share the audio, use **Upload MP3**. **Stop listening** ends the share. On phones and tablets, the music choices are **Play demo** and **Upload MP3**.
+
+The search buttons open each service's own search page. Chrome shares the selected tab's audio with the app after the listener grants permission. Web Audio measures frequency peaks and sudden changes in energy, then the selected Notes, Pitch, Rhythm, or Harmony filter sends those measurements to the artwork. Note and chord detection are estimates from the complete audio mix. The music continues playing in its original tab.
+
+Live YouTube and Spotify tab audio were verified in desktop Chrome on November 18. This flow uses browser tab sharing. Official service APIs provide search and playback controls but do not expose the audio samples used by this visualizer. Spotify's [developer policy](https://developer.spotify.com/policy) restricts content analysis and synchronization with visuals, and YouTube's [developer policies](https://developers.google.com/youtube/terms/developer-policies) restrict isolating audio. Public integration requires a separate review of those terms.
 
 | Files | What they provide |
 | --- | --- |

@@ -98,6 +98,9 @@
   #youtube-dialog input{display:block;width:100%;box-sizing:border-box;margin:.4rem 0 .65rem;padding:.6rem;font:inherit;font-size:max(16px, 1rem);border:1px solid #827987;border-radius:.4rem}
   #youtube-dialog button{font:inherit;padding:.5rem .75rem;border:1px solid #827987;border-radius:1rem;background:white;color:inherit;cursor:pointer}
   #youtube-dialog button:disabled{opacity:.6;cursor:default}
+  #youtube-dialog details{margin:1rem 0}
+  #youtube-dialog summary{cursor:pointer}
+  #youtube-dialog details form{margin-top:.65rem}
   #youtube-share{background:#271e30 !important;color:white !important}
   .welcome .wsub{display:block;margin-top:10px;font-size:.8rem;color:#514358}
   body.welcoming .top,body.welcoming .dock{display:none}
@@ -158,7 +161,7 @@
   <div class="welcome-actions" id="welcome-actions">
     <button type="button" class="go" id="wplay"><span id="wplaylabel">Play demo</span><small id="wsub">18-second track</small></button>
     <button type="button" id="wchoose">Upload MP3<small>Choose a file from your device</small></button>
-    <button type="button" id="wyoutube" hidden>Use YouTube link<small id="wyoutube-hint">Share audio from a browser tab</small></button>
+    <button type="button" id="wyoutube" hidden>Find a song<small id="wyoutube-hint">YouTube or Spotify in a browser tab</small></button>
   </div>
   <a class="go" id="web-preview" href="http://127.0.0.1:8792/experiments/fable-ink/three-styles-full.html" hidden>Open the local web preview</a>
   <span class="wsub" id="file-preview-note" hidden>The web preview connects the music player to Living Watercolor and Aurora.</span>
@@ -215,7 +218,7 @@ if (location.protocol === 'file:') {
   <div class="more">
     <button type="button" id="morebtn" aria-expanded="false" aria-controls="moremenu" aria-label="More options">More ▾</button>
     <div class="menu" id="moremenu" hidden>
-      <button type="button" id="youtube" hidden>Play from YouTube</button>
+      <button type="button" id="youtube" hidden>Find a song</button>
       <button type="button" id="snapshot" title="Download a PNG of the artwork right now. The music keeps playing.">Save a snapshot</button>
       <button type="button" id="hide" title="Tap the artwork or press any key to bring the controls back. Shortcut: H">Hide controls <kbd>H</kbd></button>
       <button type="button" id="fs" title="Shortcut: F">Full screen <kbd>F</kbd></button>
@@ -231,13 +234,22 @@ if (location.protocol === 'file:') {
 </div>
 </div>
 <dialog id="youtube-dialog" aria-labelledby="youtube-title">
-  <h2 id="youtube-title">Play from YouTube</h2>
-  <form id="youtube-form">
-    <label for="youtube-url">YouTube song link</label>
-    <input type="url" id="youtube-url" autocomplete="off" placeholder="https://www.youtube.com/watch?v=…" required>
-    <button type="submit">Open YouTube</button>
+  <h2 id="youtube-title">Find a song</h2>
+  <form id="music-search-form">
+    <label for="music-query">Song or artist</label>
+    <input type="search" id="music-query" placeholder="Vivaldi Winter" maxlength="200" required>
+    <button type="submit" value="youtube">Search YouTube</button>
+    <button type="submit" value="spotify">Search Spotify</button>
   </form>
-  <p id="youtube-steps">Press play in YouTube and return here. Click Share tab audio, choose the YouTube tab, and turn on Also share tab audio.</p>
+  <details id="music-link">
+    <summary>Use a YouTube or Spotify link</summary>
+    <form id="youtube-form">
+      <label for="youtube-url">Song or playlist link</label>
+      <input type="url" id="youtube-url" autocomplete="off" placeholder="https://…" required>
+      <button type="submit">Open link</button>
+    </form>
+  </details>
+  <p id="youtube-steps">Play the song in your browser, then return here. Choose <strong>Share tab audio</strong>, select the tab that’s playing, and turn on <strong>Also share tab audio</strong>.</p>
   <button type="button" id="youtube-share">Share tab audio</button>
   <button type="button" id="youtube-close">Close</button>
   <p id="youtube-status" role="status"></p>
@@ -1709,14 +1721,14 @@ const youtubeHosts = new Set(['youtu.be','youtube.com','www.youtube.com','m.yout
 const onMobile = /Android|iPhone|iPad|iPod|Mobile/.test(navigator.userAgent) ||
   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 $('wyoutube').hidden = $('youtube').hidden = onMobile;
-const canShareYouTubeTab = !onMobile && typeof navigator.mediaDevices?.getDisplayMedia === 'function';
-if (!canShareYouTubeTab) $('wyoutube-hint').textContent = 'Desktop Chrome or Edge';
+const canShareMusicTab = !onMobile && typeof navigator.mediaDevices?.getDisplayMedia === 'function';
+if (!canShareMusicTab) $('wyoutube-hint').textContent = 'Desktop Chrome or Edge';
 function openYouTubeDialog(event) {
   const opener = event.currentTarget;
-  $('youtube-form').hidden = $('youtube-steps').hidden = youtubeShare.hidden = !canShareYouTubeTab;
-  youtubeStatus.textContent = canShareYouTubeTab ? '' :
-    'YouTube tab audio needs desktop Chrome or Edge. On this device, play the demo or choose an MP3.';
-  youtubeShare.disabled = !canShareYouTubeTab;
+  $('music-search-form').hidden = $('music-link').hidden = $('youtube-steps').hidden = youtubeShare.hidden = !canShareMusicTab;
+  youtubeStatus.textContent = canShareMusicTab ? '' :
+    'Sharing tab audio needs desktop Chrome or Edge. On this device, play the demo or choose an MP3.';
+  youtubeShare.disabled = !canShareMusicTab;
   youtubeDialog.showModal();
   youtubeDialog.addEventListener('close', () => {
     if (tabCapture) play.focus();
@@ -1726,19 +1738,48 @@ function openYouTubeDialog(event) {
 $('youtube').addEventListener('click', openYouTubeDialog);
 $('wyoutube').addEventListener('click', openYouTubeDialog);
 $('youtube-close').addEventListener('click', () => youtubeDialog.close());
+function openMusicTab(url) {
+  window.open(url.href, '_blank', 'noopener,noreferrer');
+  youtubeStatus.textContent = 'The music site opens in a new tab. Play your song there, then return here to share its audio.';
+}
+$('music-search-form').addEventListener('submit', event => {
+  event.preventDefault();
+  const query = $('music-query').value.trim();
+  if (!query) {
+    youtubeStatus.textContent = 'Enter a song title or artist to search.';
+    return;
+  }
+  if (event.submitter?.value === 'spotify') {
+    openMusicTab(new URL('https://open.spotify.com/search/' + encodeURIComponent(query)));
+    return;
+  }
+  const url = new URL('https://www.youtube.com/results');
+  url.searchParams.set('search_query', query);
+  openMusicTab(url);
+});
 $('youtube-form').addEventListener('submit', event => {
   event.preventDefault();
-  const url = new URL($('youtube-url').value);
+  let url;
+  try { url = new URL($('youtube-url').value); } catch {}
+  const invalidLink = 'Paste a YouTube video or playlist link, or a Spotify song, album, or playlist link.';
+  if (!url || url.protocol !== 'https:' || url.port || url.username || url.password) {
+    youtubeStatus.textContent = invalidLink;
+    return;
+  }
+  if (url.hostname === 'open.spotify.com' && /^\/(?:intl-[a-z-]+\/)?(?:track|album|playlist)\/[A-Za-z0-9]+\/?$/i.test(url.pathname)) {
+    openMusicTab(url);
+    return;
+  }
   const videoId = url.hostname === 'youtu.be' ? url.pathname.slice(1)
     : url.pathname === '/watch' ? url.searchParams.get('v')
     : url.pathname.match(/^\/(?:shorts|live)\/([^/]+)\/?$/)?.[1];
-  if (url.protocol !== 'https:' || url.port || url.username || url.password ||
-      !youtubeHosts.has(url.hostname) || !/^[\w-]{11}$/.test(videoId || '')) {
-    youtubeStatus.textContent = 'Paste a YouTube link to a specific video.';
+  const validVideo = /^[\w-]{11}$/.test(videoId || '');
+  const validPlaylist = url.pathname === '/playlist' && /^[\w-]{10,}$/.test(url.searchParams.get('list') || '');
+  if (!youtubeHosts.has(url.hostname) || (!validVideo && !validPlaylist)) {
+    youtubeStatus.textContent = invalidLink;
     return;
   }
-  window.open(url.href, '_blank', 'noopener,noreferrer');
-  youtubeStatus.textContent = 'Press play in YouTube, then return here to share the tab.';
+  openMusicTab(url);
 });
 youtubeShare.addEventListener('click', async () => {
   youtubeShare.disabled = true;
@@ -1752,7 +1793,7 @@ youtubeShare.addEventListener('click', async () => {
     });
     const surface = stream.getVideoTracks()[0]?.getSettings().displaySurface;
     if ((surface && surface !== 'browser') || !stream.getAudioTracks().length) {
-      youtubeStatus.textContent = 'Choose the YouTube tab and turn on Also share tab audio.';
+      youtubeStatus.textContent = 'Choose the tab playing your song and turn on Also share tab audio.';
       return;
     }
     const input = AC.createMediaStreamSource(stream);
@@ -1773,9 +1814,16 @@ youtubeShare.addEventListener('click', async () => {
     $('track').title = $('track').textContent;
     say('Listening. Press play in the shared tab to start the artwork.');
   } catch (error) {
-    youtubeStatus.textContent = error.name === 'NotAllowedError'
-      ? 'Sharing was canceled. Click Share tab audio to try again.'
-      : 'Tab audio could not start. Try this page in desktop Chrome or Edge.';
+    console.warn('Tab audio could not start:', error.name, error.message);
+    if (error.name === 'NotAllowedError') {
+      youtubeStatus.textContent = 'Tab sharing was canceled or blocked. Click Share tab audio to try again.';
+    } else if (error.name === 'InvalidStateError') {
+      youtubeStatus.textContent = 'Bring this Chrome or Edge tab to the front, then click Share tab audio again.';
+    } else if (error.name === 'NotReadableError') {
+      youtubeStatus.textContent = 'The browser could not read the shared tab. Check its screen sharing permissions, or upload an MP3.';
+    } else {
+      youtubeStatus.textContent = 'Tab audio could not start. Open this page in desktop Chrome or Edge, or upload an MP3.';
+    }
   } finally {
     stream?.getTracks().forEach(track => track.stop());
     youtubeShare.disabled = false;
