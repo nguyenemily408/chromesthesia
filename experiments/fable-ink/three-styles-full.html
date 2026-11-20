@@ -23,7 +23,6 @@
   canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
   #living-watercolor{position:absolute;inset:0;width:100%;height:100%;border:0;background:#f6f3ec;pointer-events:none}
   #aurora-norway{position:absolute;inset:0;width:100%;height:100%;border:0;background:#000;pointer-events:none}
-  #bioluminescent-wave{position:absolute;inset:0;width:100%;height:100%;border:0;background:#020b11;pointer-events:none}
   body.waiting-for-music main iframe{visibility:hidden}
   #ref{position:absolute;inset:0;background:var(--paper);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;z-index:2}
   #ref img{max-width:100%;max-height:calc(100% - 28px);object-fit:contain;border:1px solid var(--line)}
@@ -94,23 +93,57 @@
   @media(max-height:470px){.welcome h1{font-size:clamp(2.5rem,11vh,4rem)}}
   #youtube-dialog{width:min(28rem,calc(100% - 2rem));box-sizing:border-box;padding:1.5rem;border:1px solid #cfc8d2;border-radius:1rem;background:#faf8f5;color:#271e30}
   #youtube-dialog::backdrop{background:rgba(20,13,24,.6)}
-  #youtube-dialog h2{margin:0 0 1rem;font-size:1.25rem}
-  #youtube-dialog p{margin:.8rem 0;line-height:1.4}
-  #youtube-dialog input{display:block;width:100%;box-sizing:border-box;margin:.4rem 0 .65rem;padding:.6rem;font:inherit;font-size:max(16px, 1rem);border:1px solid #827987;border-radius:.4rem}
-  #youtube-dialog button{font:inherit;padding:.5rem .75rem;border:1px solid #827987;border-radius:1rem;background:white;color:inherit;cursor:pointer}
-  #youtube-dialog button:disabled{opacity:.6;cursor:default}
-  #youtube-dialog details{margin:1rem 0}
-  #youtube-dialog summary{cursor:pointer}
-  #youtube-dialog details form{margin-top:.65rem}
-  #youtube-share{background:#271e30 !important;color:white !important}
+  #youtube-dialog h2{margin:0 0 .85rem;font-size:1.25rem}
+  #youtube-dialog p{margin:.75rem 0;line-height:1.45}
+  #youtube-dialog input{display:block;width:100%;box-sizing:border-box;margin:.4rem 0 .75rem;padding:.65rem;font:inherit;font-size:max(16px,1rem);border:1px solid #827987;border-radius:.5rem;background:#fffdf8;color:inherit;caret-color:#63278a}
+  #youtube-dialog input::placeholder{color:#655b69}
+  #youtube-dialog :is(button,.music-action){display:inline-flex;align-items:center;justify-content:center;min-height:44px;box-sizing:border-box;font:inherit;padding:.45rem .85rem;border:1px solid #827987;border-radius:1.4rem;background:#fffdf8;color:inherit;text-decoration:none;cursor:pointer}
+  #youtube-dialog :is(button,.music-action):hover{background:#f1e9f1}
+  #youtube-dialog :is(button,a,input):focus-visible{outline:2px solid #63278a;outline-offset:3px}
+  #youtube-dialog button:disabled{opacity:.65;cursor:default}
+  #youtube-dialog .music-primary{background:#2b1e32;color:#fff;border-color:#2b1e32}
+  #youtube-dialog .music-primary:hover{background:#462f51}
+  #youtube-dialog [hidden]{display:none}
+  #music-services{display:grid;gap:.5rem}
+  #youtube-dialog #music-services button{display:grid;gap:.16rem;text-align:left;justify-content:start;padding:.65rem .85rem;border-radius:.7rem}
+  #music-services button span:first-child{font-weight:600}
+  #music-services button span + span{font-size:.85rem;color:#65556b}
+  #spotify-instructions ol{margin:.4rem 0 .8rem;padding-inline-start:1.35rem;line-height:1.5}
+  #spotify-instructions li + li{margin-top:.35rem}
+  .music-footer{display:flex;justify-content:space-between;gap:.65rem;margin-top:1rem;padding-top:.8rem;border-top:1px solid #ded6df}
+  #youtube-close{margin-inline-start:auto}
+  #youtube-status:empty{margin:0}
   .embedded-player{padding:8px 12px;border-bottom:1px solid var(--line)}
   .embedded-player iframe{display:block;border:0;width:100%;height:110px}
-  #spotify-player{height:80px;border-radius:12px}
+  .embedded-player.spotify iframe{height:80px;border-radius:12px}
+  .embedded-player.spotify.song-list iframe{height:152px}
+  .embedded-player.youtube{display:grid;grid-template-columns:auto 1fr;column-gap:12px;align-items:center}
+  .embedded-player.youtube iframe{width:356px;height:200px;border-radius:8px;grid-row:1 / span 2}
+  .embedded-player.youtube .actions{margin-top:0;align-self:end}
+  .embedded-player.youtube p{align-self:start}
+  @media (max-width:560px){.embedded-player.youtube{display:block}.embedded-player.youtube iframe{width:100%}.embedded-player.youtube .actions{margin-top:6px}}
+  #spotify-instructions{margin-top:1rem;padding-top:.8rem;border-top:1px solid #ded6df;font-size:.9rem}
+  #spotify-instructions p{margin:0 0 .4rem;font-weight:600}
+  #spotify-instructions small{display:block;margin-top:.7rem;color:#65556b}
   .embedded-player p{margin:5px 0;font-size:.8rem}
   .embedded-player .actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px}
   .embedded-player button{padding:4px 10px;font-size:.8rem}
+  .embedded-player .actions span{font-size:.8rem}
   .embedded-player p:empty{display:none}
-  body:has(.embedded-player:not([hidden])) .dock{opacity:1;pointer-events:auto;transform:translateX(-50%)}
+  /* A loaded music player keeps the bar up until the artwork hears music (touch screens: always). */
+  body:has(.embedded-player:not([hidden])):not(.music-on) .dock{opacity:1;pointer-events:auto;transform:translateX(-50%)}
+  @media (hover:none){body:has(.embedded-player:not([hidden])) .dock{opacity:1;pointer-events:auto;transform:translateX(-50%)}}
+  /* With a mouse, while music plays, the bottom bar shows only when the pointer is over its area (or keyboard focus is in it). */
+  @media (hover:hover){
+    body.music-on:not(.dock-near) .dock:not(:has(:focus-visible)){opacity:0;pointer-events:none;transform:translate(-50%,16px)}
+  }
+  .color-key .paper{display:inline-block;position:relative;overflow:hidden;width:30px;height:20px;border-radius:4px;border:1px solid rgba(43,30,50,.3);background:#f6f1e7;flex:none}
+  .color-key .paper b{position:absolute;border-radius:50%}
+  .color-key .paper u{position:absolute;left:4px;top:9px;width:22px;height:2px;background:#b8860b;transform:rotate(-12deg)}
+  .color-key .gold-dots{display:inline-flex;align-items:center}
+  .color-key .gold-dots i{width:5px;height:5px;background:#b8860b}
+  .color-key .blob{display:inline-block;width:18px;height:13px;border-radius:50%;border:2px solid #b8860b;flex:none}
+  .color-key .ribbon{display:inline-block;width:22px;height:4px;border-radius:4px;flex:none}
   .welcome .wsub{display:block;margin-top:10px;font-size:.8rem;color:#514358}
   body.welcoming .top,body.welcoming .dock{display:none}
   body:not(.welcoming) .welcome{opacity:0;pointer-events:none}
@@ -192,11 +225,11 @@ if (location.protocol === 'file:') {
         <option value="ink">Ink</option>
         <option value="glass">Diamond</option>
         <option value="aurora">Aurora over Norway</option>
-        <option value="tide">Bioluminescent Tide</option>
       </select>
     </label>
     <label class="stylepick"><span>Filter</span>
       <select id="filterSel" aria-label="Music filter">
+        <option value="original" selected>Original</option>
         <option value="notes">Notes</option>
         <option value="pitch">Pitch</option>
         <option value="rhythm">Rhythm</option>
@@ -209,23 +242,15 @@ if (location.protocol === 'file:') {
   <canvas id="cv" role="img" aria-label="Painting made from the music"></canvas>
 </main>
 <div class="dock" id="dock">
-<section id="soundcloud-panel" class="embedded-player" aria-label="SoundCloud player" hidden>
-  <iframe id="soundcloud-player" title="SoundCloud music player" allow="autoplay"></iframe>
+<section id="soundcloud-panel" class="embedded-player" aria-label="Music player" hidden>
+  <iframe id="soundcloud-player" title="Music player" allow="autoplay; encrypted-media; clipboard-write" referrerpolicy="strict-origin-when-cross-origin"></iframe>
   <div class="actions">
     <button type="button" id="soundcloud-share">Share this tab’s audio</button>
     <button type="button" id="soundcloud-close">Remove player</button>
-    <span>Select The Sound of Color with tab audio on.</span>
+    <button type="button" id="player-newtab" hidden>Won’t play here? Open on YouTube</button>
+    <span id="player-hint">When Chrome asks, keep tab audio on and click Allow. The song then starts by itself.</span>
   </div>
   <p id="soundcloud-status" role="status"></p>
-</section>
-<section id="spotify-panel" class="embedded-player" aria-label="Spotify player" hidden>
-  <iframe id="spotify-player" title="Spotify music player" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"></iframe>
-  <div class="actions">
-    <button type="button" id="spotify-share">Share this tab’s audio</button>
-    <button type="button" id="spotify-close">Remove player</button>
-    <span>Select The Sound of Color with tab audio on.</span>
-  </div>
-  <p id="spotify-status" role="status"></p>
 </section>
 <p id="source" hidden></p>
 <section id="panel" aria-live="polite">
@@ -262,26 +287,35 @@ if (location.protocol === 'file:') {
 </div>
 <dialog id="youtube-dialog" aria-labelledby="youtube-title">
   <h2 id="youtube-title">Find a song</h2>
-  <form id="music-search-form">
-    <label for="music-query">Song or artist</label>
-    <input type="search" id="music-query" placeholder="Vivaldi Winter" maxlength="200" required>
-    <button type="submit" value="youtube">Search YouTube</button>
-    <button type="submit" value="spotify">Search Spotify</button>
-    <button type="submit" value="soundcloud">Search SoundCloud</button>
+  <div id="music-services">
+    <button type="button" data-music-service="youtube"><span>YouTube</span><span>Paste a video or playlist link</span></button>
+    <button type="button" data-music-service="soundcloud"><span>SoundCloud</span><span>Paste a track or playlist link</span></button>
+    <button type="button" data-music-service="spotify"><span>Spotify</span><span>Paste a song, album or playlist link</span></button>
+  </div>
+  <form id="youtube-form" hidden>
+    <label for="youtube-url" id="music-link-label">Song link</label>
+    <input type="url" id="youtube-url" autocomplete="off" placeholder="https://…" required>
+    <button type="submit" class="music-primary">Use link</button>
   </form>
-  <details id="music-link">
-    <summary>Use a YouTube, Spotify or SoundCloud link</summary>
-    <form id="youtube-form">
-      <label for="youtube-url">Song or playlist link</label>
-      <input type="url" id="youtube-url" autocomplete="off" placeholder="https://…" required>
-      <button type="submit">Use link</button>
-    </form>
-  </details>
-  <p>Paste a Spotify or SoundCloud track or playlist link to play it in the bottom bar.</p>
-  <p id="youtube-steps">Play the song in your browser, then return here. Choose <strong>Share tab audio</strong>, select the tab that’s playing, and turn on <strong>Also share tab audio</strong>.</p>
-  <button type="button" id="youtube-share">Share tab audio</button>
-  <button type="button" id="youtube-close">Close</button>
+  <div id="youtube-handoff" hidden>
+    <p>Play the video in the YouTube tab, then return here. Choose the YouTube tab in the sharing window and turn on <strong>Also share tab audio</strong>.</p>
+    <button type="button" id="youtube-share" class="music-primary">Share tab audio</button>
+  </div>
+  <div id="spotify-instructions" hidden>
+    <p>How to get a Spotify link</p>
+    <ol>
+      <li>Open Spotify and find your song, album or playlist.</li>
+      <li>Click the three dots (<strong>…</strong>) next to it, then <strong>Share</strong>, then <strong>Copy Song Link</strong>.</li>
+      <li>Come back here, paste the link in the box above and click <strong>Use link</strong>.</li>
+    </ol>
+    <a id="spotify-open" class="music-action" href="https://open.spotify.com/" target="_blank" rel="noopener noreferrer">Open Spotify to copy a link</a>
+    <small>Spotify plays a short preview unless you are signed in to Spotify in this browser.</small>
+  </div>
   <p id="youtube-status" role="status"></p>
+  <div class="music-footer">
+    <button type="button" id="music-back" hidden>Back</button>
+    <button type="button" id="youtube-close">Close</button>
+  </div>
 </dialog>
 <script src="./concept-styles.js"></script>
 <script>
@@ -1182,8 +1216,8 @@ function analyse(now){
    ===================================================================================================== */
 /* Layout hints. Defaults leave every renderer exactly as it was. */
 const LAYOUT={x:null,xs:.05,band:1,prog:0,size:1};
-let trigger='notes';
-const TRIGGER_NAMES={notes:'Notes',pitch:'Pitch',rhythm:'Rhythm',harmony:'Harmony'};
+let trigger='original';
+const TRIGGER_NAMES={original:'Original watercolor',notes:'Notes',pitch:'Pitch',rhythm:'Rhythm',harmony:'Harmony'};
 
 /* the preferred demo (18 s) has known chords: Am, F, C, G, each lasting 4.25 s */
 const ORIG_CHORDS=[
@@ -1302,19 +1336,46 @@ function renderColorKey(chord=null){
   const key=$('colorKey'),row=$('colorKeyRow');
   key.hidden=false;
   row.replaceChildren();
+  const el=(tag,cls,css)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(css)n.style.cssText=css;n.setAttribute('aria-hidden','true');return n};
+  const sep=()=>{const n=document.createElement('span');n.textContent='·';return n};
+  // Picture keys: small drawings instead of sentences.
+  if (trigger === 'original') {
+    const paper=stage=>{
+      const p=el('span','paper');
+      if(stage>0)p.append(el('b','','left:3px;top:4px;width:14px;height:12px;background:#7fb2ea'),el('b','','right:2px;top:2px;width:12px;height:11px;background:#ee8fb0'));
+      if(stage>1)p.append(el('u'));
+      return p;
+    };
+    row.append('Song start',paper(0),'→',paper(1),'→',paper(2),'Song end');
+    key.scrollLeft = 0;
+    return;
+  }
+  const auroraRamp=()=>{const r=el('span','spectrum');r.style.background='linear-gradient(90deg,#24ff5c,#14e6e6,#598cff,#b866ff,#ff61b8)';return r};
+  // Rhythm key as a picture: marks grow from a soft hit to a hard hit. The four colors only take turns.
+  const hitScale = shape => {
+    row.append('Soft hit');
+    [6, 10, 15, 21].forEach((size, index) => {
+      const mark = document.createElement('i');
+      mark.setAttribute('aria-hidden', 'true');
+      mark.style.width = mark.style.height = size + 'px';
+      if (shape === 'ripple') {
+        mark.style.boxSizing = 'border-box';
+        mark.style.border = '1.5px solid #17b890';
+        mark.style.background = 'transparent';
+      } else mark.style.background = 'hsl(' + hueOf(RHYTHM_COLORS[index]) + ',95%,48%)';
+      row.append(mark);
+    });
+    row.append('Hard hit');
+  };
   if (style === 'aurora') {
-    if (trigger === 'harmony' && chord) row.append((chord.how === 'known' ? 'Demo chord ' : 'Estimated chord ') + chord.name, '·');
-    if (trigger === 'pitch') {
-      const ramp = document.createElement('span');
-      ramp.className = 'spectrum';
-      ramp.style.background = 'linear-gradient(90deg,#24ff5c,#14e6e6,#598cff,#b866ff,#ff61b8)';
-      ramp.setAttribute('aria-hidden', 'true');
-      row.append('Low pitch', ramp, 'High pitch');
-    } else row.append({
-      notes:'Notes light up the sky',
-      rhythm:'Hits ripple through the lights',
-      harmony:'Chords light several ribbons together'
-    }[trigger]);
+    if (trigger === 'rhythm') { hitScale('ripple'); key.scrollLeft = 0; return; }
+    // Aurora colors its lights by how high the sound is, not by note name.
+    if (trigger === 'pitch') row.append('Low pitch', auroraRamp(), 'High pitch');
+    else if (trigger === 'notes') row.append('Low note', auroraRamp(), 'High note');
+    else {
+      row.append((chord ? (chord.how === 'known' ? 'Demo chord ' : 'Estimated chord ') + chord.name : 'Chord'), '=', '3 ribbons');
+      for (const color of ['#24ff5c', '#598cff', '#b866ff']) row.append(el('span', 'ribbon', 'background:' + color));
+    }
     key.scrollLeft = 0;
     return;
   }
@@ -1328,7 +1389,6 @@ function renderColorKey(chord=null){
   };
   switch(trigger){
     case 'notes':
-      row.append('Note colors');
       for(let i=0;i<12;i++){
         const pc=(i*7)%12;
         swatch(pc,NOTE[pc]);
@@ -1340,33 +1400,35 @@ function renderColorKey(chord=null){
       bar.setAttribute('aria-hidden','true');
       bar.style.background='linear-gradient(90deg,'+PITCH_HUES.map(h=>'hsl('+h+',92%,49%)').join(',')+')';
       row.append('Low pitch',bar,'High pitch');
+      if (style === 'livingWatercolor') {
+        const dots=gaps=>{const g=el('span','gold-dots');gaps.forEach(gap=>g.append(el('i','','margin-left:'+gap+'px')));return g};
+        row.append(sep(),'Small jump',dots([0,-1,-1]),dots([0,6,10]),'Big jump');
+      }
       break;
     }
     case 'rhythm':
-      row.append(style === 'livingWatercolor' ? 'Hits add washes' : 'Accents release color');
-      for (const pc of RHYTHM_COLORS) swatch(pc, '');
+      hitScale('dot');
+      if (style === 'livingWatercolor') {
+        const dot = document.createElement('span');
+        dot.textContent = '·';
+        row.append(dot, 'Gold line');
+        for (const width of [10, 24, 46]) {
+          const line = document.createElement('i');
+          line.setAttribute('aria-hidden', 'true');
+          line.style.cssText = 'width:' + width + 'px;height:3px;border-radius:3px;background:#b8860b';
+          row.append(line);
+        }
+        row.append('grows with the hit');
+      }
       break;
     case 'harmony':
       if(chord){
-        row.append((chord.how==='known'?'Demo chord ':'Estimated chord ')+chord.name);
-        chord.tones.forEach(pc=>swatch(pc,NOTE[pc]));
-      }else row.append('Colors follow the chord');
+        row.append((chord.how==='known'?'Demo chord ':'Estimated chord ')+chord.name,'=');
+        chord.tones.forEach((pc,i)=>{if(i)row.append('+');swatch(pc,NOTE[pc])});
+      }else row.append('Chord','=','the colors of its notes');
+      if (style === 'livingWatercolor') row.append(sep(),'New chord',el('span','blob','background:hsl('+hueOf(chord?chord.tones[0]:0)+',70%,72%)'));
       break;
   }
-  if (style === 'livingWatercolor') {
-    const gold = {
-      notes:'New notes bloom in color, with fine gold along some edges',
-      pitch:'More sound in a range adds more paint · Bigger jumps scatter gold farther',
-      rhythm:'Strong hits draw lines. Harder hits draw longer lines.',
-      harmony:'Edges trace new chords'
-    };
-    const key = document.createElement('span');
-    key.textContent = (['notes', 'pitch'].includes(trigger) ? '' : 'Gold: ') + gold[trigger];
-    if (trigger === 'notes') row.prepend(key, '·');
-    else row.append('·', key);
-  }
-  if (style === 'tide' && ['notes', 'pitch'].includes(trigger)) row.append(trigger === 'pitch'
-    ? '· Pitch colors trace the foam and sand lace' : '· Color glows inside the wave');
   key.scrollLeft=0;
 }
 
@@ -1383,8 +1445,8 @@ function updateChordReadout(){
   else if(L&&!L.children.length)L.textContent='Chord colors appear when the music plays';
   el.append(b,h?'Chord: '+h.name+' ('+h.tones.map(p=>NOTE[p]).join(' ')+') · '+(h.how==='known'?'known from the demo':'estimate, may be wrong'):info.text);
 }
-const LEAD={notes:'Each note has a color',pitch:'Higher pitch sits higher',rhythm:'Accents release color',harmony:'Chords shape the palette'};
-const DEFAULTS={notes:{style:'livingWatercolor',mode:'fade'},pitch:{style:'aurora',mode:'fade'},rhythm:{style:'ink',mode:'paint'},harmony:{style:'livingWatercolor',mode:'fade'}};
+const LEAD={original:'The original painting unfolds with the song',notes:'Each note has a color',pitch:'Higher pitch sits higher',rhythm:'Accents release color',harmony:'Chords shape the palette'};
+const DEFAULTS={original:{style:'livingWatercolor',mode:'fade'},notes:{style:'livingWatercolor',mode:'fade'},pitch:{style:'aurora',mode:'fade'},rhythm:{style:'ink',mode:'paint'},harmony:{style:'livingWatercolor',mode:'fade'}};
 function chip(pc,label,row){
   const c=document.createElement('div'),i=document.createElement('i');
   c.className='chip'+(row?' row':'');i.style.background=paint(pc,1,1,false);c.append(i,label);return c;
@@ -1421,6 +1483,9 @@ const LIVING = (() => {
   const pigments = Array.from({length: 12}, (_, pc) => noteRGB(pc).map(value => 1 - value));
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
   const length = () => tabCapture ? 90 : isDemo() ? duration : (audio.duration || duration);
+  const originalDuration = 240;
+  const paintingProgress = () => trigger === 'original' && tabCapture
+    ? clamp(playbackTime() / originalDuration) : progress();
   function resetMusic() {
     lastWash = lastHeard = -Infinity;
     chord = '';
@@ -1430,8 +1495,15 @@ const LIVING = (() => {
     sequence = 0;
     resetMusic();
     if (!renderer) return;
-    renderer.start({duration: tabCapture ? liveClockLength : length(), gold: trigger, auto: false, externalClock: true});
-    if (playbackTime() > 0) renderer.seek(progress());
+    const original = trigger === 'original';
+    const paintingDuration = tabCapture ? originalDuration : Math.min(originalDuration, length() * 2);
+    renderer.start({
+      duration: original ? paintingDuration : tabCapture ? liveClockLength : length(),
+      gold: original ? null : trigger,
+      auto: original,
+      externalClock: true
+    });
+    if (playbackTime() > 0) renderer.seek(paintingProgress());
     if (!playingMusic()) renderer.pause();
   }
   function init() {
@@ -1440,7 +1512,7 @@ const LIVING = (() => {
     iframe.id = 'living-watercolor';
     iframe.title = 'Living Watercolor artwork';
     iframe.tabIndex = -1;
-    iframe.src = '../../living-watercolor/watercolor.html?ui=0&auto=0&v=fine-gold-tracing';
+    iframe.src = '../../living-watercolor/watercolor.html?ui=0&auto=0&v=fable-original';
     iframe.addEventListener('load', event => {
       if (event.currentTarget !== iframe) return;
       try { renderer = iframe.contentWindow.watercolor; } catch { renderer = null; }
@@ -1451,8 +1523,9 @@ const LIVING = (() => {
   }
   function frame(F, time) {
     if (!renderer) return;
-    renderer.follow(progress());
     if (audio.seeking) return;
+    renderer.follow(paintingProgress());
+    if (trigger === 'original') return;
     const lead = F.energy >= .035 ? F.notes[0] : null;
     if (!lead) return;
     const isNotes = trigger === 'notes';
@@ -1526,7 +1599,7 @@ const LIVING = (() => {
   }
   return {init, begin, frame, step() {}, resize() {},
     remove() { iframe?.remove(); iframe = renderer = null; },
-    seek() { renderer?.seek(progress()); resetMusic(); },
+    seek() { renderer?.seek(paintingProgress()); resetMusic(); },
     play() { renderer?.play(); },
     pause() { renderer?.pause(); },
     finish() { renderer?.follow(1); renderer?.pause(); },
@@ -1579,58 +1652,12 @@ const AURORA = (() => {
     snapshot() { return sky?.snapshot(); }
   };
 })();
-const WAVE = (() => {
-  let iframe, wave;
-  function init() {
-    if (wave) {
-      wave.setPitchPalette?.(PITCH_HUES);
-      wave.reset();
-      wave.setPlaying(playingMusic());
-      return;
-    }
-    if (iframe) return;
-    iframe = document.createElement('iframe');
-    iframe.id = 'bioluminescent-wave';
-    iframe.title = 'Bioluminescent wave';
-    iframe.tabIndex = -1;
-    iframe.src = '../../bioluminescent-shore/music-wave-preview.html?embed=1';
-    iframe.addEventListener('load', event => {
-      if (event.currentTarget !== iframe) return;
-      try { wave = iframe.contentWindow.musicWave; } catch { wave = null; }
-      if (!wave) {
-        say('The bioluminescent wave could not load. Choose another style and try again.');
-        return;
-      }
-      wave.setPitchPalette?.(PITCH_HUES);
-      wave.reset();
-      wave.setPlaying(playingMusic());
-    });
-    $('main').append(iframe);
-  }
-  return {
-    init,
-    frame(F, time) {
-      wave?.setFilter?.(trigger);
-      wave?.frame(F, time);
-    },
-    step() {},
-    resize() {},
-    setPlaying(playing) { wave?.setPlaying(playing); },
-    snapshot() { return wave?.snapshot(); },
-    remove() {
-      wave?.destroy();
-      iframe?.remove();
-      wave = iframe = null;
-    }
-  };
-})();
 const RENDERERS = {
-  livingWatercolor: LIVING, ink: INK, glass: GLASS, aurora: AURORA,
-  tide: WAVE
+  livingWatercolor: LIVING, ink: INK, glass: GLASS, aurora: AURORA
 };
 let R = RENDERERS[style];
 /* watercolor and the ink painting mode keep everything and end as a still image; the others let go of old marks */
-const keeps = () => R === LIVING || R === AURORA || R === WAVE || (style === 'ink' && mode === 'paint');
+const keeps = () => R === LIVING || R === AURORA || (style === 'ink' && mode === 'paint');
 let tabCapture = null;
 let file = null;
 let fileUrl = '';
@@ -1694,17 +1721,19 @@ function sizeCanvas() {
 
 function describe() {
   description.textContent = complete ? 'Your painting is ready to save.' : LEAD[trigger];
-  $('subnote').textContent = complete ? '' : style === 'livingWatercolor' ? 'Living Watercolor: the music adds washes to wet paper.'
+  $('subnote').textContent = complete ? '' : trigger === 'original' ? 'The song sets the pace of the original painting.'
+    : style === 'livingWatercolor' ? 'Living Watercolor: the music adds washes to wet paper.'
     : style === 'sh' ? 'Musical Shapes: forms arrive with each note, then recede.'
     : style === 'glass' ? (GLASS.ok ? 'Glass Diamond: the stone turns with the music and takes its colors from it.' : 'Glass Diamond is not available in this browser.')
     : style === 'ink' ? 'Ink Clouds: clouds stay and layer into a painting.' : '';
 }
 
 function syncUI() {
+  document.body.classList.toggle('music-on', playingMusic());
   const hasSong = audio.hasAttribute('src');
   const track = $('track');
   const label = tabCapture?.label || file?.name || (isDemo() ? demoLabel()
-    : !$('spotify-panel').hidden ? 'Spotify' : !$('soundcloud-panel').hidden ? 'SoundCloud' : 'No song selected');
+    : !$('soundcloud-panel').hidden ? PLAYER_NAMES[embeddedService] || 'Music player' : 'No song selected');
   if (track.textContent !== label) track.textContent = track.title = label;
   play.disabled = starting || (!hasSong && !tabCapture);
   play.textContent = tabCapture ? 'Stop listening' : !hasSong ? 'Play song' : audio.paused
@@ -1747,8 +1776,9 @@ function reset() {
   R = RENDERERS[style];
   if (R !== LIVING) LIVING.remove();
   if (R !== AURORA) AURORA.remove();
-  if (R !== WAVE) WAVE.remove();
   $('styleSel').value = style;
+  $('filterSel').options[0].hidden = style !== 'livingWatercolor';
+  $('filterSel').value = trigger;
   renderSource();
   renderLegend();
   backdrop();
@@ -1797,9 +1827,9 @@ function endTabPlayback() {
   const heardMusic = playingMusic();
   stopTabCapture();
   removeMusicPlayers();
+  quietAudioEngine();
   if (R === LIVING) LIVING.pause();
   if (R === AURORA) AURORA.setPlaying(false);
-  if (R === WAVE) WAVE.setPlaying(false);
   complete = heardMusic && keeps();
   if (!heardMusic) reset();
   renderSource();
@@ -1815,121 +1845,216 @@ const onMobile = /Android|iPhone|iPad|iPod|Mobile/.test(navigator.userAgent) ||
   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 $('wyoutube').hidden = $('youtube').hidden = onMobile;
 const canShareMusicTab = !onMobile && typeof navigator.mediaDevices?.getDisplayMedia === 'function';
-if (!canShareMusicTab) $('wyoutube-hint').textContent = 'Desktop Chrome or Edge';
-function openYouTubeDialog(event) {
+const musicServices = $('music-services');
+const musicLinkForm = $('youtube-form');
+const musicLink = $('youtube-url');
+const musicBack = $('music-back');
+const noTabAudioMessage = 'Tab audio sharing needs desktop Chrome or Edge. You can also play the demo or upload an MP3.';
+let musicService = '';
+
+function showMusicServices() {
+  const previous = musicService;
+  musicService = '';
+  $('youtube-title').textContent = 'Find a song';
+  musicServices.hidden = false;
+  musicLinkForm.hidden = $('youtube-handoff').hidden = $('spotify-instructions').hidden = musicBack.hidden = true;
+  musicLinkForm.reset();
+  youtubeStatus.textContent = '';
+  const buttons = Array.from(musicServices.querySelectorAll('button'));
+  (buttons.find(button => button.dataset.musicService === previous) || buttons[0]).focus();
+}
+
+musicServices.addEventListener('click', event => {
+  const button = event.target.closest('[data-music-service]');
+  if (!button) return;
+  musicService = button.dataset.musicService;
+  const spotify = musicService === 'spotify';
+  const label = {youtube: 'YouTube', soundcloud: 'SoundCloud', spotify: 'Spotify'}[musicService];
+  $('youtube-title').textContent = label;
+  musicServices.hidden = true;
+  musicBack.hidden = false;
+  $('spotify-instructions').hidden = !spotify;
+  musicLinkForm.hidden = false;
+  $('music-link-label').textContent = label + (musicService === 'youtube' ? ' video or playlist link'
+    : spotify ? ' song, album or playlist link' : ' track or playlist link');
+  musicLink.placeholder = musicService === 'youtube' ? 'https://www.youtube.com/…'
+    : spotify ? 'https://open.spotify.com/track/…' : 'https://soundcloud.com/…';
+  musicLink.focus();
+});
+musicBack.addEventListener('click', showMusicServices);
+musicLink.addEventListener('input', () => { youtubeStatus.textContent = ''; });
+
+function openMusicDialog(event) {
   const opener = event.currentTarget;
-  $('music-search-form').hidden = $('music-link').hidden = $('youtube-steps').hidden = youtubeShare.hidden = !canShareMusicTab;
-  youtubeStatus.textContent = canShareMusicTab ? '' :
-    'Sharing tab audio needs desktop Chrome or Edge. On this device, play the demo or choose an MP3.';
-  youtubeShare.disabled = !canShareMusicTab;
   youtubeDialog.showModal();
+  showMusicServices();
   youtubeDialog.addEventListener('close', () => {
     if (tabCapture) play.focus();
-    else (opener.id === 'youtube' ? $('morebtn') : opener).focus();
+    else if (!$('soundcloud-panel').hidden) {
+      $(canShareMusicTab ? 'soundcloud-share' : 'soundcloud-close').focus();
+    } else (opener.id === 'youtube' ? $('morebtn') : opener).focus();
   }, {once: true});
 }
-$('youtube').addEventListener('click', openYouTubeDialog);
-$('wyoutube').addEventListener('click', openYouTubeDialog);
+$('youtube').addEventListener('click', openMusicDialog);
+$('wyoutube').addEventListener('click', openMusicDialog);
 $('youtube-close').addEventListener('click', () => youtubeDialog.close());
+// One bottom-dock player is shared by SoundCloud and Spotify links.
+const PLAYER_NAMES = {soundcloud: 'SoundCloud', spotify: 'Spotify', youtube: 'YouTube'};
+let embeddedService = '', youtubePageUrl = '';
 function removeSoundCloud() {
   $('soundcloud-player').removeAttribute('src');
   $('soundcloud-panel').hidden = true;
+  embeddedService = '';
+  playerLoaded = wantPlay = false;
+  clearTimeout(playRetry);
 }
-function removeSpotify() {
-  $('spotify-player').removeAttribute('src');
-  $('spotify-panel').hidden = true;
+// YouTube's own small player in the bottom dock. Some videos refuse to play inside other
+// sites, so the dock keeps a button that falls back to the older separate-tab route.
+function embedYouTube(videoId, listId, pageUrl) {
+  const src = new URL('https://www.youtube.com/embed/' + (videoId || 'videoseries'));
+  if (listId) src.searchParams.set('list', listId);
+  src.searchParams.set('playsinline', '1');
+  src.searchParams.set('enablejsapi', '1');
+  src.searchParams.set('rel', '0');
+  youtubePageUrl = pageUrl;
+  embedMusicPlayer('youtube', src.href);
 }
+function showYouTubeHandoff() {
+  musicService = 'youtube';
+  $('youtube-title').textContent = 'YouTube';
+  musicServices.hidden = musicLinkForm.hidden = $('spotify-instructions').hidden = true;
+  musicBack.hidden = false;
+  $('youtube-handoff').hidden = false;
+  youtubeShare.disabled = !canShareMusicTab;
+  youtubeStatus.textContent = canShareMusicTab ? '' : noTabAudioMessage;
+  (canShareMusicTab ? youtubeShare : musicBack).focus();
+}
+$('player-newtab').addEventListener('click', () => {
+  if (!youtubePageUrl) return;
+  if (tabCapture) endTabPlayback();
+  removeSoundCloud();
+  syncUI();
+  window.open(youtubePageUrl, '_blank', 'noopener,noreferrer');
+  youtubeDialog.showModal();
+  showYouTubeHandoff();
+});
 function removeMusicPlayers() {
   removeSoundCloud();
-  removeSpotify();
 }
-$('spotify-close').addEventListener('click', () => {
-  if (tabCapture) endTabPlayback();
-  removeSpotify();
-  syncUI();
-});
 $('soundcloud-close').addEventListener('click', () => {
   if (tabCapture) endTabPlayback();
   removeSoundCloud();
   syncUI();
 });
 function embedSoundCloud(url) {
-  if (tabCapture) endTabPlayback();
-  clearLocalSong();
-  removeMusicPlayers();
   const widget = new URL('https://w.soundcloud.com/player/');
   widget.searchParams.set('url', url.href);
   widget.searchParams.set('auto_play', 'false');
   widget.searchParams.set('show_artwork', 'true');
   widget.searchParams.set('visual', 'false');
-  $('soundcloud-player').src = widget.href;
-  $('soundcloud-status').textContent = '';
+  embedMusicPlayer('soundcloud', widget.href);
+}
+// Spotify's official compact player. It plays the music but gives the page no sound data,
+// so the artwork still needs "Share this tab's audio".
+function embedSpotify(kind, id) {
+  embedMusicPlayer('spotify', 'https://open.spotify.com/embed/' + kind + '/' + id);
+  // Albums and playlists get a taller player so the song list and skip buttons are visible.
+  $('soundcloud-panel').classList.toggle('song-list', kind !== 'track');
+}
+function embedMusicPlayer(service, src) {
+  if (tabCapture) endTabPlayback();
+  clearLocalSong();
+  removeMusicPlayers();
+  embeddedService = service;
+  const panel = $('soundcloud-panel'), name = PLAYER_NAMES[service];
+  panel.classList.toggle('spotify', service === 'spotify');
+  panel.classList.toggle('youtube', service === 'youtube');
+  panel.classList.remove('song-list');
+  $('player-newtab').hidden = service !== 'youtube';
+  $('player-newtab').classList.remove('accent');
+  $('player-newtab').textContent = 'Won’t play here? Open on YouTube';
+  panel.setAttribute('aria-label', name + ' player');
+  $('soundcloud-player').title = name + ' music player';
+  $('soundcloud-player').src = src;
+  $('soundcloud-status').textContent = canShareMusicTab ? '' : noTabAudioMessage;
+  $('soundcloud-share').disabled = !canShareMusicTab;
   $('soundcloud-panel').hidden = false;
   youtubeDialog.close();
   leaveWelcome();
   reset();
-  $('soundcloud-share').focus();
+  // Ask for this tab's sound straight away, while the Use link click still counts as
+  // permission to ask. If it is declined, the Share button in the dock asks again.
+  // The song starts by itself once that question is answered, so the artwork hears it from the start.
+  playerLoaded = wantPlay = false;
+  const startSong = () => { if (embeddedService === service) { wantPlay = true; playEmbeddedSong(); } };
+  if (canShareMusicTab) shareMusicTab(true).finally(startSong);
+  else startSong();
 }
-function embedSpotify(kind, id) {
-  if (tabCapture) endTabPlayback();
-  clearLocalSong();
-  removeMusicPlayers();
-  const widget = new URL('https://open.spotify.com/embed/' + kind + '/' + id);
-  widget.searchParams.set('theme', '0');
-  $('spotify-player').src = widget.href;
-  $('spotify-status').textContent = '';
-  $('spotify-panel').hidden = false;
-  youtubeDialog.close();
-  leaveWelcome();
-  reset();
-  $('spotify-share').focus();
+// Presses play inside the loaded player, using each service's own published player messages.
+let playerLoaded = false, wantPlay = false, playRetry = 0;
+function playEmbeddedSong() {
+  clearTimeout(playRetry);
+  const frame = $('soundcloud-player').contentWindow;
+  if (!wantPlay || !playerLoaded || !embeddedService || !frame) return;
+  const send = () => {
+    if (embeddedService === 'soundcloud') frame.postMessage(JSON.stringify({method: 'play'}), 'https://w.soundcloud.com');
+    else if (embeddedService === 'youtube') frame.postMessage(JSON.stringify({event: 'command', func: 'playVideo', args: []}), 'https://www.youtube.com');
+    else if (embeddedService === 'spotify') frame.postMessage({command: 'play'}, 'https://open.spotify.com');
+  };
+  if (embeddedService === 'spotify') playRetry = setTimeout(() => { send(); wantPlay = false; }, 900);
+  else { send(); playRetry = setTimeout(() => { send(); wantPlay = false; }, 1500); }
 }
-function openMusicTab(url) {
-  window.open(url.href, '_blank', 'noopener,noreferrer');
-  youtubeStatus.textContent = 'The music site opens in a new tab. Play your song there, then return here to share its audio.';
-}
-$('music-search-form').addEventListener('submit', event => {
-  event.preventDefault();
-  const query = $('music-query').value.trim();
-  if (!query) {
-    youtubeStatus.textContent = 'Enter a song title or artist to search.';
-    return;
-  }
-  if (event.submitter?.value === 'spotify') {
-    openMusicTab(new URL('https://open.spotify.com/search/' + encodeURIComponent(query)));
-    return;
-  }
-  if (event.submitter?.value === 'soundcloud') {
-    const url = new URL('https://soundcloud.com/search/sounds');
-    url.searchParams.set('q', query);
-    openMusicTab(url);
-    return;
-  }
-  const url = new URL('https://www.youtube.com/results');
-  url.searchParams.set('search_query', query);
-  openMusicTab(url);
+$('soundcloud-player').addEventListener('load', () => {
+  if (!$('soundcloud-player').getAttribute('src')) return;
+  playerLoaded = true;
+  // Ask YouTube's player to report back, so a video that refuses to play here can be explained.
+  if (embeddedService === 'youtube') $('soundcloud-player').contentWindow.postMessage(
+    JSON.stringify({event: 'listening', id: 1, channel: 'widget'}), 'https://www.youtube.com');
+  playEmbeddedSong();
 });
-$('youtube-form').addEventListener('submit', event => {
+window.addEventListener('message', event => {
+  if (event.origin !== 'https://www.youtube.com' || embeddedService !== 'youtube' ||
+      event.source !== $('soundcloud-player').contentWindow) return;
+  let data;
+  try { data = JSON.parse(event.data); } catch { return; }
+  if (data.event === 'onReady') playEmbeddedSong();
+  if (data.event === 'onError') {
+    $('soundcloud-status').textContent = 'YouTube will not play this video inside the app. Click “Open on YouTube” to play it in a second tab instead.';
+    $('player-newtab').classList.add('accent');
+    $('player-newtab').textContent = 'Open on YouTube';
+  }
+});
+musicLinkForm.addEventListener('submit', event => {
   event.preventDefault();
   let url;
-  try { url = new URL($('youtube-url').value); } catch {}
-  const invalidLink = 'Paste a YouTube, Spotify or SoundCloud track or playlist link.';
+  try { url = new URL(musicLink.value); } catch {}
+  const isSoundCloud = musicService === 'soundcloud';
+  const isSpotify = musicService === 'spotify';
+  const invalidLink = isSoundCloud ? 'Paste a full SoundCloud track or playlist link.'
+    : isSpotify ? 'Paste a Spotify song, album or playlist link. In Spotify, use Share → Copy link.'
+    : 'Paste a YouTube video or playlist link.';
   if (!url || url.protocol !== 'https:' || url.port || url.username || url.password) {
     youtubeStatus.textContent = invalidLink;
     return;
   }
-  if (['soundcloud.com', 'www.soundcloud.com', 'm.soundcloud.com'].includes(url.hostname) &&
-      /^\/[\w-]+\/(?:sets\/)?[\w-]+\/?$/.test(url.pathname)) {
-    url.hostname = 'soundcloud.com';
-    embedSoundCloud(url);
+  if (isSoundCloud) {
+    if (['soundcloud.com', 'www.soundcloud.com', 'm.soundcloud.com'].includes(url.hostname) &&
+        /^\/[\w-]+\/(?:sets\/)?[\w-]+\/?$/.test(url.pathname)) {
+      url.hostname = 'soundcloud.com';
+      embedSoundCloud(url);
+    } else {
+      youtubeStatus.textContent = invalidLink;
+    }
     return;
   }
-  const spotify = url.hostname === 'open.spotify.com' &&
-    url.pathname.match(/^\/(?:intl-[a-z-]+\/|embed\/)?(track|album|playlist)\/([A-Za-z0-9]{22})\/?$/i);
-  if (spotify) {
-    embedSpotify(spotify[1].toLowerCase(), spotify[2]);
+  if (isSpotify) {
+    const match = url.hostname === 'open.spotify.com' &&
+      url.pathname.match(/^\/(?:intl-[a-z]{2}\/)?(?:embed\/)?(track|album|playlist)\/([A-Za-z0-9]{22})\/?$/);
+    if (match) embedSpotify(match[1], match[2]);
+    else youtubeStatus.textContent = invalidLink;
     return;
   }
+
   const videoId = url.hostname === 'youtu.be' ? url.pathname.slice(1)
     : url.pathname === '/watch' ? url.searchParams.get('v')
     : url.pathname.match(/^\/(?:shorts|live)\/([^/]+)\/?$/)?.[1];
@@ -1939,13 +2064,12 @@ $('youtube-form').addEventListener('submit', event => {
     youtubeStatus.textContent = invalidLink;
     return;
   }
-  openMusicTab(url);
+  embedYouTube(validVideo ? videoId : '', url.searchParams.get('list') && /^[\w-]{10,}$/.test(url.searchParams.get('list')) ? url.searchParams.get('list') : '', url.href);
 });
-async function shareMusicTab(currentTab = false, service = 'soundcloud') {
+async function shareMusicTab(currentTab = false) {
   youtubeShare.disabled = true;
   $('soundcloud-share').disabled = true;
-  $('spotify-share').disabled = true;
-  const status = currentTab ? $(service + '-status') : youtubeStatus;
+  const status = currentTab ? $('soundcloud-status') : youtubeStatus;
   status.textContent = '';
   let stream;
   try {
@@ -1966,7 +2090,8 @@ async function shareMusicTab(currentTab = false, service = 'soundcloud') {
   } catch (error) {
     console.warn('Tab audio could not start:', error.name, error.message);
     if (error.name === 'NotAllowedError') {
-      status.textContent = 'Tab sharing was canceled or blocked. Click Share tab audio to try again.';
+      status.textContent = currentTab ? 'The artwork cannot hear the music yet. Click Share this tab’s audio, then Allow.'
+        : 'Tab sharing was canceled or blocked. Click Share tab audio to try again.';
     } else if (error.name === 'InvalidStateError') {
       status.textContent = 'Bring this Chrome or Edge tab to the front, then click Share tab audio again.';
     } else if (error.name === 'NotReadableError') {
@@ -1978,12 +2103,10 @@ async function shareMusicTab(currentTab = false, service = 'soundcloud') {
     stream?.getTracks().forEach(track => track.stop());
     youtubeShare.disabled = false;
     $('soundcloud-share').disabled = false;
-    $('spotify-share').disabled = false;
   }
 }
 youtubeShare.addEventListener('click', () => shareMusicTab());
 $('soundcloud-share').addEventListener('click', () => shareMusicTab(true));
-$('spotify-share').addEventListener('click', () => shareMusicTab(true, 'spotify'));
 function connectMusicStream(stream, label = 'Listening to tab audio', monitor = false) {
   ensureAC();
   const input = AC.createMediaStreamSource(stream);
@@ -2045,6 +2168,10 @@ async function togglePlayback() {
   play.disabled = true;
   try {
     if (audio.ended) reset();
+    if (demoUrl && audio.getAttribute('src') === demoUrl && audio.currentTime === 0) {
+      $('mute').setAttribute('aria-pressed', 'true');
+      if (output) output.gain.value = 0;
+    }
     ensureAC();
     if (!elSrc) {
       elSrc = AC.createMediaElementSource(audio);
@@ -2080,6 +2207,10 @@ function resume(source) {
 $('styleSel').addEventListener('change', () => {
   const wasPlaying = !audio.paused;
   style = $('styleSel').value; styleChosen = true;
+  if (style !== 'livingWatercolor' && trigger === 'original') {
+    trigger = 'notes';
+    mode = DEFAULTS.notes.mode;
+  }
   reset();
   if (wasPlaying) resume(audio.getAttribute('src'));
   if (tabCapture) { say('Style changed. Still listening to the shared tab.'); return; }
@@ -2123,16 +2254,19 @@ function showArtwork() {
   }
   if (R === LIVING) LIVING.play();
   if (R === AURORA) AURORA.setPlaying(true);
-  if (R === WAVE) WAVE.setPlaying(true);
 }
 audio.addEventListener('playing', showArtwork);
+/* When nothing is playing, switch the sound engine off. A running engine keeps streaming silence to the
+   speakers, so the computer keeps them powered and can show the page as playing sound. Play turns it back on. */
+function quietAudioEngine() {
+  if (AC && AC.state === 'running' && audio.paused && !tabCapture) AC.suspend();
+}
 audio.addEventListener('pause', () => {
+  quietAudioEngine();
   if (R === LIVING) LIVING.pause();
   if (R === AURORA) AURORA.setPlaying(false);
-  if (R === WAVE) WAVE.setPlaying(false);
 });
 audio.addEventListener('seeked', () => {
-  if (R === WAVE) { if (progress() < 1) complete = false; syncUI(); return; }
   if (R === AURORA) { AURORA.resetLights(); if (progress() < 1) complete = false; syncUI(); return; }
   if (R !== LIVING) return;
   LIVING.seek();
@@ -2141,7 +2275,6 @@ audio.addEventListener('seeked', () => {
 audio.addEventListener('ended', () => {
   if (R === LIVING) LIVING.finish();
   if (R === AURORA) AURORA.setPlaying(false);
-  if (R === WAVE) WAVE.setPlaying(false);
   complete = keeps();
   fading = !complete;
   if (fading) INK_GL.look.fade = .9925;
@@ -2157,7 +2290,7 @@ let resizeTimer;
 window.addEventListener('resize', () => {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
-    const still = complete && R !== LIVING && R !== AURORA && R !== WAVE ? document.createElement('canvas') : null;
+    const still = complete && R !== LIVING && R !== AURORA ? document.createElement('canvas') : null;
     if (still) {
       still.width = cv.width;
       still.height = cv.height;
@@ -2170,6 +2303,7 @@ window.addEventListener('resize', () => {
   }, 120);
 });
 
+const NEW_SONG_GAP_MS = 1500;
 let lastFrame = 0;
 function loop(now) {
   requestAnimationFrame(loop);
@@ -2183,8 +2317,22 @@ function loop(now) {
     if (tabCapture && tabCapture.startedAt === null) {
       if (frame.energy < .035) return;
       tabCapture.startedAt = now;
+      tabCapture.quietSince = null;
       showArtwork();
       wake();
+    } else if (tabCapture) {
+      /* A shared tab cannot tell the app when the next song starts. A silent gap followed by
+         sound is treated as a new song: the canvas returns to its starting state first. */
+      if (frame.energy < .035) tabCapture.quietSince ??= now;
+      else {
+        const gap = tabCapture.quietSince == null ? 0 : now - tabCapture.quietSince;
+        tabCapture.quietSince = null;
+        if (gap >= NEW_SONG_GAP_MS) {
+          AURORA.nextScene();
+          reset();
+          return;
+        }
+      }
     }
     R.frame(frame, playbackTime());
     updateChordReadout();
@@ -2214,6 +2362,13 @@ function wake(fromMove) {
   if (playingMusic()) calmTimer = setTimeout(() => { if (playingMusic() && !youtubeDialog.open && !controlsHot()) calm('auto'); else wake(); }, 2500);
 }
 window.addEventListener('pointermove', () => wake(true), {passive: true});
+// Bottom bar: visible only while the mouse is over its area.
+window.addEventListener('pointermove', event => {
+  const dock = $('dock');
+  const near = event.clientY >= dock.getBoundingClientRect().top - 32 || !!event.target.closest?.('.dock');
+  document.body.classList.toggle('dock-near', near);
+}, {passive: true});
+document.documentElement.addEventListener('pointerleave', () => document.body.classList.remove('dock-near'));
 window.addEventListener('focusin', () => wake());
 window.addEventListener('keydown', event => {
   if (/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName) || event.metaKey || event.ctrlKey || event.altKey) { wake(); return; }

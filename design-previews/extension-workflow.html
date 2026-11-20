@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Sound of Color — extension workflow preview</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f4f0eb;color:#2b1e32;font:16px/1.45 system-ui,sans-serif}
+main{max-width:1400px;margin:auto;padding:34px}header{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:26px}h1{font:italic 36px Georgia,serif;margin:0}header span{font-size:13px;color:#65566c}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:26px}.step h2{font-size:20px;margin:0 0 4px}.step>p{margin:0 0 15px;color:#65566c;font-size:14px}
+.browser{height:285px;border-radius:13px;border:1px solid #d6cdd9;overflow:hidden;background:white;box-shadow:0 8px 20px #2b1e3210}
+.toolbar{height:35px;background:#e9e3e9;display:flex;align-items:center;gap:10px;padding:7px 12px;font-size:11px;color:#665b6b}.dots{letter-spacing:3px}.address{flex:1;border-radius:5px;background:#f9f7fa;padding:3px 12px}
+.color{background:#6a397f;color:white;padding:3px 9px;border-radius:5px;font-weight:650}
+.store{padding:28px 28px;display:grid;grid-template-columns:66px 1fr;gap:18px}.appmark{width:66px;height:66px;background:url('../assets/home/home-wide.jpg') center/cover;border-radius:14px}
+h3{margin:0 0 6px;font-size:23px}.sub{color:#74677a;font-size:13px;margin:0 0 16px}.button{display:inline-block;background:#33203d;color:white;border-radius:22px;padding:9px 18px;font-size:13px;font-weight:600}.store .details{grid-column:1/-1;font-size:14px;color:#65566c;border-top:1px solid #eee6ee;padding-top:14px}
+.music{background:#131116;color:#eee8f1;height:250px;padding:19px 26px}.services{display:flex;gap:17px;font-size:12px;color:#b9a8c0;margin-bottom:17px}.services strong{color:#fff;border-bottom:2px solid #c196dd;padding-bottom:5px}.song{display:flex;gap:16px;align-items:center}.cover{height:77px;width:77px;flex:none;background:linear-gradient(135deg,#265b64,#8ab6b3);display:grid;place-items:center;font:italic 20px Georgia;color:#e8f8f7}.song h3{font:27px Georgia,serif}.line{height:3px;background:#403347;margin-top:23px}.line:before{content:'';display:block;width:28%;height:3px;background:#c5aad8}.controls{display:flex;align-items:center;justify-content:space-between;margin-top:10px;font-size:11px;color:#b9a8c0}.controls b{color:white;font-size:12px}
+.popup-scene{position:relative;background:#17131b;padding:25px;height:250px;color:#eee8f1}.popup-scene>h3{font:26px Georgia,serif;margin-top:25px}.popup-scene>p{font-size:13px;color:#b9a8c0}.popup{position:absolute;right:13px;top:5px;width:240px;background:#faf7f4;color:#2b1e32;border:1px solid #ddd0e4;border-radius:10px;padding:19px;box-shadow:0 7px 20px #0003}.popup h3{font:italic 24px Georgia,serif}.popup .button{display:block;text-align:center}.popup .sub{margin-bottom:17px}
+.art{height:250px;background:url('../assets/home/home-wide.jpg') center/cover;position:relative}.artnav{position:absolute;top:12px;left:12px;padding:8px 13px;border-radius:8px;background:#fffE;font-size:12px}.playbar{position:absolute;bottom:12px;left:12px;right:12px;background:#fffE;padding:10px 14px;border-radius:10px;display:flex;align-items:center;gap:14px;font-size:11px}.playbar strong{flex:1}.playbar span{background:#33203d;color:white;padding:6px 10px;border-radius:20px}.caption{font:italic 32px Georgia,serif;position:absolute;top:89px;left:0;width:100%;text-align:center;color:#39273e}
+body.single main{max-width:1100px;padding:48px}body.single .grid{display:block}body.single .step{display:none}body.single .step.selected{display:block}body.single .browser{height:490px}body.single .music,body.single .popup-scene,body.single .art{height:455px}body.single .toolbar{height:35px}body.single .store{padding:70px 60px;gap:26px}body.single .appmark{width:90px;height:90px}body.single .store{grid-template-columns:90px 1fr}body.single .music{padding:60px}body.single .song{margin-top:40px}body.single .cover{width:125px;height:125px}body.single .popup{top:12px;width:300px;padding:25px}body.single .popup-scene{padding:65px}body.single .caption{top:180px;font-size:45px}body.single .playbar{padding:15px;font-size:14px}body.single .artnav{font-size:14px}nav{margin-top:22px;text-align:center}nav a{display:inline-block;color:#4e315c;margin:0 8px;font-size:13px}
+@media(max-width:800px){.grid{grid-template-columns:1fr}header{display:block}header span{display:block;margin-top:10px}}
+</style>
+<main>
+<header><h1>The Sound of Color</h1><span>Proposed Chrome extension flow · mockups</span></header>
+<div class="grid">
+<section class="step" data-step="1"><h2>1. Install once</h2><p>Add the free extension to Chrome.</p><div class="browser"><div class="toolbar"><span class="dots">•••</span><div class="address">Chrome Web Store</div></div><div class="store"><div class="appmark"></div><div><h3>The Sound of Color</h3><p class="sub">Turn the music you play into moving art.</p><div class="button">Add to Chrome</div></div><div class="details">Free to use. Starts listening when you click the extension.</div></div></div></section>
+<section class="step" data-step="2"><h2>2. Play your music</h2><p>Choose a song in your usual music tab.</p><div class="browser"><div class="toolbar"><span class="dots">•••</span><div class="address">open.spotify.com</div><span class="color">Color</span></div><div class="music"><div class="services"><strong>Spotify</strong><span>YouTube</span><span>SoundCloud</span></div><div class="song"><div class="cover">Winter</div><div><p class="sub">Now playing</p><h3>Vivaldi · Winter</h3><span style="font-size:13px;color:#b9a8c0">Your chosen performance</span></div></div><div class="line"></div><div class="controls"><span>0:42</span><b>Pause</b><span>3:33</span></div></div></div></section>
+<section class="step" data-step="3"><h2>3. Click Color</h2><p>Start the visuals from the tab that is playing.</p><div class="browser"><div class="toolbar"><span class="dots">•••</span><div class="address">open.spotify.com</div><span class="color">Color</span></div><div class="popup-scene"><h3>Vivaldi · Winter</h3><p>Your song keeps playing.</p><div class="popup"><h3>The Sound of Color</h3><p class="sub">Listen to this music tab</p><div class="button">Start visuals</div><p style="font-size:12px;margin-bottom:0">The artwork opens in a new tab.</p></div></div></div></section>
+<section class="step" data-step="4"><h2>4. Watch the music paint</h2><p>Change styles and filters, or save your favorite moment.</p><div class="browser"><div class="toolbar"><span class="dots">•••</span><div class="address">The Sound of Color</div><span class="color">Color</span></div><div class="art"><div class="artnav">Living Watercolor &nbsp; ▾ &nbsp; | &nbsp; Pitch &nbsp; ▾</div><div class="caption">Your music, in color.</div><div class="playbar"><strong>Listening to your music tab</strong><span>Snapshot</span><span>Stop listening</span></div></div></div></section>
+</div>
+<nav><a href="?">All steps</a><a href="?step=1">Install</a><a href="?step=2">Play</a><a href="?step=3">Start</a><a href="?step=4">Watch</a></nav>
+</main>
+<script>
+const step = new URLSearchParams(location.search).get('step');
+if (['1','2','3','4'].includes(step)) {
+ document.body.classList.add('single');
+ document.querySelector('[data-step="'+step+'"]').classList.add('selected');
+}
+</script>
+</html>

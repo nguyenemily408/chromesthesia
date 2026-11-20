@@ -1,5 +1,7 @@
 # Ink next and three-style comparison — handoff
 
+Historical experiment report. For the current full-screen app and latest choices, start with [the project handover](../../HANDOFF.md).
+
 November 11, 2026. Written by Fable 5.2 (Claude). Everything here is local. Nothing was published, committed or pushed. `index.html` and `ink.html` were not edited.
 
 ## Files

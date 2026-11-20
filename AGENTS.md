@@ -4,7 +4,7 @@ Always explain changes in plain English. The project owner is not a software eng
 
 ## Coordination
 
-Read README.md, AGENT-WORK.md, and the latest handoff before editing. Record your task, the files or renderer blocks you own, and your status in AGENT-WORK.md. Read files again immediately before editing because another session may have changed them.
+Read HANDOFF.md, README.md, AGENT-WORK.md, and the latest relevant style handoff before editing. HANDOFF.md is the current consolidated state; older experiment notes can contain superseded choices. Record your task, the files or renderer blocks you own, and your status in AGENT-WORK.md. Read files again immediately before editing because another session may have changed them.
 
 Only one agent integrates changes to index.html at a time. Prefer separate Git branches and working folders for simultaneous tasks. When sessions share a folder, agree on separate files or named renderer blocks and preserve all other changes.
 

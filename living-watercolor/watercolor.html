@@ -187,12 +187,6 @@ void main(){
   float ramp = smoothstep(0.42, 0.92, uProg);               // the gold edges creep in during the second half
   float region = smoothstep(0., 0.07, fbm(px*0.007 + uSeed) - mix(0.95, uVeinAmt, ramp));   // only some edges, in patches
   float vein = smoothstep(uVein.x, uVein.y, edge)*mix(region, texture(uC, vUv).a * .9, uLocalGold);
-  if (uLocalGold > 1.5) {
-    float breaks = smoothstep(.50, .61, fbm(px*.028 + uSeed));
-    float pigment = (dR + dL + dU + dD) * .25;
-    float width = max(fwidth(pigment), .001);
-    vein = (1. - smoothstep(width*.25, width*1.35, abs(pigment-.12))) * breaks * .88;
-  }
   float cover = max(smoothstep(0.03, 0.2, ma), vein);
   if (cover > 0.002) {
     vec3 gold = vec3(0.83,0.69,0.36);                                  // a pale, warm gold, not ochre
@@ -276,7 +270,11 @@ let externalClock = false;
 function plan() {
   const r = rng(seed * 7919 + 13), rm = rng(seed * 31 + 5);   // rm decides only where the metallic paint goes
   totalSteps = Math.round(duration * STEPS_PER_SEC);
-  const n = Math.max(12, Math.min(70, Math.round(duration / 7)));
+  // The embedded original uses the four-minute composition at any song length.
+  // Short songs use fewer simulation steps while keeping the same brush paths.
+  const originalDuration = 240;
+  const timing = externalClock ? duration / originalDuration : 1;
+  const n = Math.max(12, Math.min(70, Math.round((externalClock ? originalDuration : duration) / 7)));
   const scale = Math.sqrt(34 / n);
   // the arrangement: a large blue wash through the middle, red-pink above, yellow and green below, white paper around it.
   // Each painting shifts these colour "homes" a little and may mirror them left to right. "from" = when that colour joins in.
@@ -332,12 +330,15 @@ function plan() {
         const a = ang + bend * u + sway * Math.sin(wob + u * 7);
         x += Math.cos(a) * K.len / 48 / aspect; y += Math.sin(a) * K.len / 48; }
     }
-    const steps = Math.round(K.steps);
+    const steps = Math.max(1, Math.round(K.steps));
     const dwell = kind === 'splatter' ? 26 : Math.min(steps, Math.max(40, 2 * K.rad / (K.len / steps)));
     const c = PAINTS[home.c];
-    strokes.push({ kind, t0: Math.round((0.012 + 0.9 * f + (r() - 0.5) * 0.4 / n) * totalSteps), steps, pts, rads, rad: K.rad,
-                   hard: K.hard, dry: K.dry || 0, taper: K.taper || 0, wr: K.water / dwell,
-                   col: c.map(v => metal ? 0 : v * K.load / dwell), metal: (metal || [0, 0, 0]).map(v => v * 2.6 / dwell) });
+    const timedSteps = Math.max(kind === 'splatter' ? pts.length * 2 : 1, Math.round(steps * timing));
+    const deposit = steps / timedSteps / dwell;
+    strokes.push({ kind, t0: Math.round((0.012 + 0.9 * f + (r() - 0.5) * 0.4 / n) * totalSteps),
+                   steps: timedSteps, pts, rads, rad: K.rad,
+                   hard: K.hard, dry: K.dry || 0, taper: K.taper || 0, wr: K.water * deposit,
+                   col: c.map(v => metal ? 0 : v * K.load * deposit), metal: (metal || [0, 0, 0]).map(v => v * 2.6 * deposit) });
   }
   // trial "notes" look: gold rings gathered at one home spot, with a few small gold discs elsewhere
   rings = [];
@@ -413,9 +414,8 @@ function draw() {
   gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, sets[cur].c);
   gl.uniform1i(showP.u.uA, 0); gl.uniform1i(showP.u.uB, 1); gl.uniform1i(showP.u.uC, 2); gl.uniform1f(showP.u.uTime, step);
   gl.uniform1f(showP.u.uLook, LOOK); gl.uniform1f(showP.u.uProg, step / totalSteps); gl.uniform1f(showP.u.uSeed, (seed % 97) * 3.1);
-  const noteTracing = externalClock && goldMode === "notes";
-  gl.uniform1f(showP.u.uLocalGold, noteTracing ? 2 : Number(externalClock && G_EDGE));
-  gl.uniform2f(showP.u.uVein, (G_EDGE || noteTracing) ? VEIN[0] : 9, (G_EDGE || noteTracing) ? VEIN[1] : 10); gl.uniform1f(showP.u.uVeinAmt, Math.max(0.3, (goldMode === 'harmony' ? 0.4 : VEIN[2]) - veinExtra)); gl.uniform2f(showP.u.uTexel, 1 / W, 1 / H); gl.uniform1f(showP.u.uDamp, dampAt(step / totalSteps));
+  gl.uniform1f(showP.u.uLocalGold, Number(externalClock && !autoPlan && G_EDGE));
+  gl.uniform2f(showP.u.uVein, G_EDGE ? VEIN[0] : 9, G_EDGE ? VEIN[1] : 10); gl.uniform1f(showP.u.uVeinAmt, Math.max(0.3, (goldMode === 'harmony' ? 0.4 : VEIN[2]) - veinExtra)); gl.uniform2f(showP.u.uTexel, 1 / W, 1 / H); gl.uniform1f(showP.u.uDamp, dampAt(step / totalSteps));
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   // pen lines
   const c = inkc.getContext('2d'), w = inkc.width, h = inkc.height, t = step / totalSteps;
@@ -488,10 +488,10 @@ function seek(fraction) {
   const to = stepAt(fraction);
   if (to < step) {
     makeSets(); step = 0; extra = [];
-    if (externalClock) { strokes = []; rings = []; inkLines = []; veinExtra = 0; }
+    if (externalClock && !autoPlan) { strokes = []; rings = []; inkLines = []; veinExtra = 0; }
   }
   target = to; clock = to / STEPS_PER_SEC;
-  if (externalClock) { step = to; extra = []; }
+  if (externalClock && !autoPlan) { step = to; extra = []; }
   draw();
 }
 function follow(fraction) {

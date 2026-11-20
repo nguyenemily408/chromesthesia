@@ -1,5 +1,7 @@
 # The Sound of Color
 
+Start with [HANDOFF.md](HANDOFF.md) for the current project state, Emily's latest choices, what has been tested, and remaining work. Older experiment handoffs contain superseded choices.
+
 For the current full-screen preview with Living Watercolor and Aurora over Norway, run this from the project folder:
 
 ```sh
@@ -8,11 +10,13 @@ python3 -m http.server 8792 --bind 127.0.0.1
 
 Open [the local web preview](http://127.0.0.1:8792/experiments/fable-ink/three-styles-full.html), then choose **Play demo** or **Upload MP3**. The style and filter controls appear when the canvas opens. Keep the project folders together so the preview can find its files.
 
-In desktop Chrome or Edge, choose **Find a song** on the welcome screen or under **More**. Search for a song on YouTube or Spotify, paste a link, or use a tab you already have open. Play music in the browser tab, return to The Sound of Color, click **Share tab audio**, and select the playing tab with **Also share tab audio** enabled. If the service or browser does not share the audio, use **Upload MP3**. **Stop listening** ends the share. On phones and tablets, the music choices are **Play demo** and **Upload MP3**.
+On desktop, choose **Find a song** on the welcome screen or under **More**, then choose a service.
 
-The search buttons open each service's own search page. Chrome shares the selected tab's audio with the app after the listener grants permission. Web Audio measures frequency peaks and sudden changes in energy, then the selected Notes, Pitch, Rhythm, or Harmony filter sends those measurements to the artwork. Note and chord detection are estimates from the complete audio mix. The music continues playing in its original tab.
+- **YouTube** opens a video or playlist link in a new tab. Play it there, return to The Sound of Color, and choose **Share tab audio**. Select the YouTube tab with **Also share tab audio** enabled.
+- **SoundCloud** loads a track or playlist link in the bottom player. Play it there, click **Share this tab’s audio**, and choose The Sound of Color with tab audio enabled. **Remove player** clears it.
+- **Spotify** opens the web player. Play a song in desktop Chrome, click **The Sound of Color** in Chrome’s extensions menu, and choose **Start visuals**. An installed copy of the local extension is needed.
 
-SoundCloud is also available under **Find a song**, with its embedded player in the bottom playback bar. Search opens SoundCloud's results. Paste a full SoundCloud track or playlist link to load its player inside The Sound of Color. Press Play in the embedded player, then **Share this tab’s audio** and select The Sound of Color with tab audio enabled. **Remove player** stops and removes the player. This desktop flow requires Chrome's sharing approval each time. On November 20, live SoundCloud audio shared from this same tab reached Living Watercolor and painted while the song played. Player removal and paused SoundCloud with Aurora were also checked. The sharing picker is still required.
+Website tab sharing requires desktop Chrome or Edge and the browser’s permission. **Stop listening** ends the share. On phones and tablets, use **Play demo** or **Upload MP3**. After choosing a file, press **Play your song**.
 
 Live YouTube and Spotify tab audio were verified in desktop Chrome on November 18. This flow uses browser tab sharing. Official service APIs provide search and playback controls but do not expose the audio samples used by this visualizer. Spotify's [developer policy](https://developer.spotify.com/policy) restricts content analysis and synchronization with visuals, and YouTube's [developer policies](https://developers.google.com/youtube/terms/developer-policies) restrict isolating audio. Public integration requires a separate review of those terms.
 
@@ -22,6 +26,15 @@ Live YouTube and Spotify tab audio were verified in desktop Chrome on November 1
 | `living-watercolor/watercolor.html` | Living Watercolor |
 | `experiments/aurora-norway/aurora.html` and `photos/*.png` in the same Aurora folder | Aurora over Norway and its five backgrounds |
 | `assets/home/home-wide.jpg` and `assets/home/home-tall.jpg` | The welcome artwork |
+| `bioluminescent-shore/music-wave-preview.html` and `blender/serious/wave5.mp4` in the same folder | Bioluminescent Tide: the rendered wave with music-driven timing, light and color |
+
+## Local Chrome extension
+
+See [chrome-extension/README.md](chrome-extension/README.md) for building and loading the free local extension. Play music in its browser tab, open the extension, and choose **Start visuals**. The extension opens the artwork and plays the captured music through that tab. Pause the song in its original tab for silence; **Stop listening** ends capture and restores normal audio output in the original tab.
+
+The installed extension was checked with real YouTube music on November 20: Living Watercolor received audio, Tide loaded, and pausing/resuming YouTube removed/restored Chrome’s audio-playing indicator on the artwork. Spotify and SoundCloud have not yet been tested through this extension. The wave video has no audio track, and its players stay muted.
+
+Tide’s latest Pitch choice is option 3 from Claude's color review: the main water stays blue while pitch colors trace foam rims and sand lace, using the same palette as the key. This replaces the rejected stronger crest tint for Pitch. Highlight compression and reduced sparkle preserve detail at the crash. The revision was checked with silent, synthetic low/high pitches; live music still needs a fresh check of the revised look. The wave’s shape remains the same seven-second Blender clip; music changes its timing, speed and light.
 
 The original visualizer is in `index.html`. It starts with clear water in **Ink in Water**.
 

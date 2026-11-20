@@ -1,5 +1,7 @@
 # Claude handoff: renderer visuals
 
+Current project state: see [HANDOFF.md](HANDOFF.md), updated November 20. The renderer reports below describe earlier work on `index.html`; the current full-screen app is `experiments/fable-ink/three-styles-full.html`.
+
 Scope: `index.html`, the seven renderer objects only. These are **OIL, SH, CR, AUR, BR, DOT and CAVE**. Everything else is byte-identical to the version I started from. That covers the head, CSS, the shared helpers (`paint`, `vivid`, `yOf`, `blob`, `grain`), WC, INK, `MODES`/`NAMES`, `sample()`, audio, the demo and the UI. I checked this by diffing against a backup. Object names and the existing methods (`init`, `frame`, `daub`, `draw`, `ink`, `begin`, `end`, `spawn`) keep their signatures. All music inputs still drive the same things: `F.notes` (pc/midi/s/v), `energy`, `bass`, `flux`, `onset` and the per-pitch-class `lev`/`viv` levels. No git changes, nothing deployed.
 
 ## Changes
