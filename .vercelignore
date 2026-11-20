@@ -1,4 +1,15 @@
 *
+!assets/
+!bioluminescent-shore/
+!experiments/
+!living-watercolor/
+!assets/home/
+!assets/watercolor/
+!bioluminescent-shore/blender/
+!experiments/aurora-norway/
+!experiments/fable-ink/
+!bioluminescent-shore/blender/serious/
+!experiments/aurora-norway/photos/
 !vercel.json
 !living-watercolor/watercolor.html
 !experiments/aurora-norway/aurora.html
