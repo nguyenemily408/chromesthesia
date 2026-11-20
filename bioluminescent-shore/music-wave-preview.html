@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Music Wave Preview</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #02040b; overflow: hidden; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+  #panel { position: fixed; left: 12px; bottom: 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    font: 13px/1.3 -apple-system, "Helvetica Neue", Arial, sans-serif; color: #cfe9ff;
+    background: rgba(2, 8, 20, .72); padding: 8px 10px; border-radius: 10px; max-width: calc(100vw - 48px); }
+  #panel button, #panel select { font: inherit; color: #02101e; background: #7fd6ff; border: 0; border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+  #panel select { background: #cfe9ff; }
+  #status { color: #8fa9c4; min-width: 15ch; }
+  body.embed #panel { display: none; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="panel">
+  <button id="go" type="button">Play test music</button>
+  <select id="filter" aria-label="Filter">
+    <option value="notes">Notes</option><option value="pitch">Pitch</option>
+    <option value="rhythm">Rhythm</option><option value="harmony">Harmony</option>
+  </select>
+  <select id="pitch" aria-label="Test pitch" hidden>
+    <option value="">Changing pitches</option>
+    <option value="40">Low pitch · violet</option>
+    <option value="64">Middle pitch · green</option>
+    <option value="88">High pitch · pink</option>
+  </select>
+  <button id="again" type="button">Reset</button>
+  <span id="status">Silent preview. Synthetic music only.</span>
+</div>
+<script>
+/*
+  Music-reactive bioluminescent wave (prototype, silent).
+  The look comes from the finished Blender render (wave5.mp4). Music never changes the
+  rendered shapes. It decides WHEN a wave rolls in and how fast it breaks, and it adds
+  light that is masked to pixels that already glow, so nothing floats in the dark air.
+
+  API for the host app (same pattern as window.aurora):
+    musicWave.reset()            back to a calm sea, clears all light
+    musicWave.frame(F, time)     one frame of music: F.energy, F.bass, F.bright, F.onset, F.flux,
+                                 F.notes = [{midi, pc, s, v}]
+    musicWave.setPlaying(bool)   pause or resume the picture with the music
+    musicWave.snapshot()         a canvas copy of the current picture
+    musicWave.destroy()          stop everything and release the video and WebGL
+  Optional: musicWave.setFilter('notes'|'pitch'|'rhythm'|'harmony'), musicWave.debug()
+*/
+(() => {
+const SRC = 'blender/serious/wave5.mp4';           // relative to this page
+const DUR = 7.0;                                   // seconds in the clip
+// Moments in the clip (seconds), read from the render's frames.
+const T = { calmEnd: 0.55, rise: 0.5, curl: 1.5, crash: 2.85, wash: 4.0, drain: 5.3, tail: 6.35 };
+const XFADE = 0.6;                                 // seconds to blend back to the calm sea
+const EMBED = /[?&]embed=1\b/.test(location.search);
+if (EMBED) document.body.classList.add('embed');
+
+const canvas = document.getElementById('c');
+const gl = canvas.getContext('webgl2', { antialias: false, alpha: false, premultipliedAlpha: false });
+if (!gl) { window.musicWave = null; return; }
+
+// ---------- two copies of the video so the end of a wave can blend into the start of the next ----------
+function makeVideo() {
+  const v = document.createElement('video');
+  v.src = SRC; v.muted = true; v.defaultMuted = true; v.playsInline = true; v.preload = 'auto';
+  v.crossOrigin = 'anonymous'; v.loop = false; v.setAttribute('muted', ''); v.setAttribute('playsinline', '');
+  return v;
+}
+let vids = [makeVideo(), makeVideo()];
+let active = 0;                                    // which copy is on screen
+let mix = 0, mixing = false;                       // 0 = active only, 1 = other copy only
+let ready = 0;
+vids.forEach(v => v.addEventListener('loadeddata', () => { ready++; draw(); }, { once: true }));
+
+// ---------- WebGL ----------
+const VS = `#version 300 es
+void main(){ vec2 p = vec2(float((gl_VertexID<<1)&2), float(gl_VertexID&2)); gl_Position = vec4(p*2.-1.,0.,1.); }`;
+const FS = `#version 300 es
+precision highp float;
+uniform sampler2D uA, uB;
+uniform float uMix, uTime, uGlow, uFoam, uSpark, uTwinkle, uFlash, uTintAmt, uPitch;
+uniform vec3 uTint;
+uniform vec2 uCanvas, uScale, uOff;
+uniform vec4 uBurst[8];       // x, y (0..1 of the picture), radius, strength
+uniform vec3 uBurstCol[8];
+out vec4 o;
+float hash(vec2 p){ p = fract(p*vec2(123.34,456.21)); p += dot(p,p+45.32); return fract(p.x*p.y); }
+void main(){
+  vec2 fc = vec2(gl_FragCoord.x, uCanvas.y - gl_FragCoord.y);
+  vec2 uv = (fc - uOff) / uScale;                       // 0..1 across the picture (cover fit)
+  if (uv.x < 0. || uv.y < 0. || uv.x > 1. || uv.y > 1.) { o = vec4(0.,0.,0.,1.); return; }
+  vec3 c = mix(texture(uA, uv).rgb, texture(uB, uv).rgb, uMix);
+  float lum = max(c.g, c.b);
+  float lit = smoothstep(.10, .55, lum);                // only water that already glows
+  float bright = smoothstep(.35, .85, lum);
+  if (uPitch > .5) {
+    // Emily's option 3: pitch colours the foam rim and sand lace only.
+    // The blue wave body and the brightest white foam keep their original hue.
+    float edge = bright * (1. - smoothstep(.85, 1., lum));
+    c += uTint * edge * .18 * uTintAmt;
+    c = mix(c, uTint * lum * 1.1, .35 * edge * uTintAmt);
+  } else {
+    float inside = smoothstep(.12, .38, lum) * (1. - smoothstep(.62, .90, lum));
+    float edge = bright * (1. - smoothstep(.80, .98, lum));
+    vec3 tint = uTint / max(.001, max(uTint.r, max(uTint.g, uTint.b)));
+    c = mix(c, tint * lum, uTintAmt * min(.94, inside * .94 + edge * .24));
+  }
+  // overall glow with the music's energy; foam on the near beach follows the bass
+  float near = smoothstep(.45, .95, uv.y);
+  // (the broken wave is already very bright in the render, so the brightest water gets less extra)
+  c *= 1. + (uGlow * lit + uFoam * near * bright) * (1. - .7 * bright);
+  // sparkle bursts from notes, only on lit water
+  for (int k = 0; k < 8; k++) {
+    vec4 b = uBurst[k];
+    if (b.w <= 0.) continue;
+    vec2 d = (uv - b.xy) * vec2(1.78, 1.);
+    float w = exp(-dot(d, d) / (b.z * b.z)) * b.w;
+    c += uBurstCol[k] * w * lit * .24;
+  }
+  // fine twinkling specks, densest where the water is brightest
+  vec2 cell = floor(fc / 2.5);
+  float h = hash(cell);
+  float on = step(1. - uSpark * (.25 + .75 * bright), h) * lit;
+  float tw = .5 + .5 * sin(uTime * (3. + 6. * uTwinkle) * (.6 + h) + h * 80.);
+  c += uTint * on * tw * .10;
+  // a short flash of the lit water on strong hits
+  c += uTint * uFlash * lit * (1. - .6 * bright) * .12;
+  // Roll off highlights together so foam retains both texture and colour.
+  // Scaling all channels equally avoids turning strong coloured light white.
+  float peak = max(c.r, max(c.g, c.b));
+  c *= (.86 * (1. - exp(-1.3 * peak))) / max(peak, .0001);
+  o = vec4(min(c, vec3(1.)), 1.);
+}`;
+function shader(type, src) {
+  const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+  return s;
+}
+const prog = gl.createProgram();
+gl.attachShader(prog, shader(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, shader(gl.FRAGMENT_SHADER, FS));
+gl.linkProgram(prog);
+if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+gl.useProgram(prog);
+const U = {}; for (const n of ['uA','uB','uMix','uTime','uGlow','uFoam','uSpark','uTwinkle','uFlash','uTintAmt','uPitch','uTint','uCanvas','uScale','uOff','uBurst','uBurstCol']) U[n] = gl.getUniformLocation(prog, n);
+const vao = gl.createVertexArray();
+const tex = [0, 1].map(i => {
+  const t = gl.createTexture(); gl.activeTexture(gl.TEXTURE0 + i); gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([2, 4, 11, 255]));
+  return t;
+});
+gl.uniform1i(U.uA, 0); gl.uniform1i(U.uB, 1);
+
+let scale = [1, 1], off = [0, 0];
+function resize() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = Math.max(2, Math.round(innerWidth * dpr)), h = Math.max(2, Math.round(innerHeight * dpr));
+  canvas.width = w; canvas.height = h;
+  const s = Math.max(w / 16, h / 9);              // cover: fill the screen, crop the overflow
+  scale = [16 * s, 9 * s]; off = [(w - scale[0]) / 2, (h - scale[1]) / 2];
+  draw();
+}
+addEventListener('resize', resize);
+
+// ---------- music state ----------
+const P = { glow: 0, foam: 0, spark: 0, twinkle: .3, flash: 0, tintAmt: 0, tint: [0, .85, 1] };
+const bursts = [];                                  // {x, y, r, s, col, life}
+let state = 'calm';                                 // calm | wave
+let charge = 0, push = 0, playing = false, filter = 'notes';
+let lastNow = performance.now(), lastMusicAt = 0, clock = 0, lastPcs = '', destroyed = false;
+
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+// Defaults match the app; the host supplies the pitch palette used by its key.
+let pitchHues = [270, 240, 210, 180, 150, 120, 60, 30, 330];
+function waveHue(pc) { return ((pc * 7) % 12) * 30; }
+function pitchColour(midi) {
+  const slot = Math.round(clamp((midi - 40) / 48) * (pitchHues.length - 1));
+  return hsl(pitchHues[slot], .95, .5);
+}
+function hsl(hd, s, l) {
+  const f = n => { const k = (n + hd / 30) % 12, a = s * Math.min(l, 1 - l); return l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)); };
+  return [f(0), f(8), f(4)];
+}
+// Where on the picture a pitch lights up: low notes on the near, right-hand water; high notes far along the wave.
+function spot(midi) {
+  const p = clamp((midi - 40) / 48);
+  return { x: .86 - .7 * p + (Math.random() - .5) * .12, y: .72 - .36 * p + (Math.random() - .5) * .14 };
+}
+function addBurst(note, strength) {
+  const at = spot(note.midi);
+  const col = filter === 'pitch' ? pitchColour(note.midi) : hsl(waveHue(note.pc), .85, .48);
+  bursts.push({ x: at.x, y: at.y, r: .06 + .08 * strength, s: .12 + .28 * strength, col, life: 1 });
+  if (bursts.length > 8) bursts.shift();
+}
+
+function vt() { return vids[active].currentTime || 0; }
+function rate(r) { for (const v of vids) v.playbackRate = clamp(r, .25, 2.5); }
+function startWave(strength) {
+  state = 'wave'; charge = 0; push = Math.max(push, .3 * strength);
+  const v = vids[active];
+  if (v.currentTime > T.calmEnd + .2) return;     // already rolling
+  if (playing) v.play().catch(() => {});
+}
+function blendToStart() {                          // fade the finished wave into a fresh calm sea
+  if (mixing) return;
+  const other = vids[1 - active];
+  other.currentTime = 0;
+  if (playing) other.play().catch(() => {});
+  mixing = true; mix = 0;
+}
+
+function frame(F, time) {
+  if (destroyed || !F) return;
+  const now = performance.now();
+  const colourBlend = 1 - Math.exp(-Math.min(.1, lastMusicAt ? (now - lastMusicAt) / 1000 : 1 / 36) / .25);
+  lastMusicAt = now;
+  const e = clamp(F.energy || 0), bass = clamp(F.bass || 0), br = clamp(F.bright ?? .5), flux = clamp(F.flux || 0);
+  const notes = (F.notes || []).slice(0, filter === 'harmony' ? 3 : 4);
+  // steady response to the whole mix
+  P.glow += (e * .28 - P.glow) * .12;
+  P.foam += (bass * .18 - P.foam) * .1;
+  P.spark += ((.03 + .10 * br) * e - P.spark) * .08;
+  P.twinkle += (br - P.twinkle) * .08;
+  // colour target
+  if (notes.length) {
+    let rgb;
+    if (filter === 'harmony') {
+      // major chords lean turquoise-green, minor chords lean deep blue
+      const major = (notes[0].v ?? .7) > .7;
+      rgb = major ? [0, 1, .78] : [.1, .45, 1];
+    } else if (filter === 'pitch') rgb = pitchColour(notes[0].midi);
+    else rgb = hsl(waveHue(notes[0].pc), .85, .48);
+    for (let i = 0; i < 3; i++) P.tint[i] += (rgb[i] - P.tint[i]) * colourBlend;
+    const amount = e > .035 ? .75 + .25 * clamp(notes[0].s) : 0;
+    P.tintAmt += (amount - P.tintAmt) * colourBlend;
+  } else P.tintAmt *= 1 - colourBlend;
+  // strong hits flash the water
+  if (F.onset) P.flash = Math.min(1, P.flash + .25 + .6 * flux);
+  // note sparkle: new notes or attacks light spots on the glowing water
+  const pcs = notes.map(n => n.pc).join(',');
+  if (notes.length && (F.onset || pcs !== lastPcs)) {
+    const use = filter === 'rhythm' ? notes.slice(0, 1) : notes;
+    use.forEach(n => addBurst(n, clamp(n.s * (.5 + .5 * e))));
+  }
+  lastPcs = pcs;
+  // when waves roll in
+  const t = vt();
+  if (filter === 'rhythm') {
+    if (F.onset && flux > .3 && (state === 'calm' || t > T.drain)) {
+      if (t > T.drain) blendToStart();
+      startWave(flux);
+    } else if (F.onset && t > T.rise && t < T.crash) push = Math.min(1, push + .25 * flux);
+  } else {
+    charge += e * .028 + (F.onset ? .12 + .25 * flux : 0);
+    if (state === 'calm' && charge > 1) startWave(e);
+    if (F.onset && t > T.rise && t < T.crash) push = Math.min(1, push + .15 * flux);
+    if (t > T.drain && charge > 1.2) { blendToStart(); startWave(e); }
+  }
+  // break speed follows the energy; beats during the approach make it break sooner
+  if (state === 'wave') rate(.75 + .55 * e + .8 * push);
+}
+
+// ---------- drawing ----------
+let raf = 0;
+function upload(i, v) {
+  if (v.readyState < 2) return;
+  gl.activeTexture(gl.TEXTURE0 + i); gl.bindTexture(gl.TEXTURE_2D, tex[i]);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, v);
+}
+function draw() {
+  if (destroyed) return;
+  upload(0, vids[active]); upload(1, vids[1 - active]);
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  gl.useProgram(prog); gl.bindVertexArray(vao);
+  gl.uniform1f(U.uMix, mixing ? mix : 0);
+  gl.uniform1f(U.uTime, clock);
+  gl.uniform1f(U.uGlow, P.glow); gl.uniform1f(U.uFoam, P.foam); gl.uniform1f(U.uSpark, P.spark);
+  gl.uniform1f(U.uTwinkle, P.twinkle); gl.uniform1f(U.uFlash, P.flash); gl.uniform1f(U.uTintAmt, P.tintAmt);
+  gl.uniform1f(U.uPitch, filter === 'pitch' ? 1 : 0);
+  gl.uniform3fv(U.uTint, P.tint);
+  gl.uniform2f(U.uCanvas, canvas.width, canvas.height); gl.uniform2fv(U.uScale, scale); gl.uniform2fv(U.uOff, off);
+  const b = new Float32Array(32), bc = new Float32Array(24);
+  bursts.forEach((q, k) => { b.set([q.x, q.y, q.r, q.s * q.life], k * 4); bc.set(q.col, k * 3); });
+  gl.uniform4fv(U.uBurst, b); gl.uniform3fv(U.uBurstCol, bc);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+}
+function tick(now) {
+  raf = 0;
+  if (destroyed) return;
+  const dt = Math.min(.1, (now - lastNow) / 1000); lastNow = now;
+  if (playing) clock += dt;
+  // light decays
+  P.flash *= Math.pow(.04, dt); push *= Math.pow(.3, dt);
+  for (let i = bursts.length - 1; i >= 0; i--) { bursts[i].life -= dt / 1.4; bursts[i].r += dt * .03; if (bursts[i].life <= 0) bursts.splice(i, 1); }
+  // video clock
+  const v = vids[active], t = v.currentTime;
+  if (playing) {
+    if (state === 'calm') {                       // slow calm sea, looping its first half-second
+      rate(.45);
+      if (v.paused) v.play().catch(() => {});
+      if (t > T.calmEnd && !mixing) blendToStart();
+    } else if (t > T.tail && !mixing) { blendToStart(); state = 'calm'; }
+  }
+  if (mixing) {
+    if (playing) mix += dt / XFADE;
+    if (mix >= 1) {                                // swap: the fresh copy is now on screen
+      const old = vids[active]; old.pause(); old.currentTime = 0;
+      active = 1 - active; mixing = false; mix = 0;
+      if (state === 'calm') rate(.45);
+    }
+  }
+  draw();
+  if (playing || mixing) raf = requestAnimationFrame(tick);
+}
+function wake() { if (!raf && !destroyed) { lastNow = performance.now(); raf = requestAnimationFrame(tick); } }
+
+function setPlaying(on) {
+  playing = !!on;
+  if (playing) { const v = vids[active]; v.play().catch(() => {}); if (mixing) vids[1 - active].play().catch(() => {}); wake(); }
+  else { vids.forEach(v => v.pause()); draw(); }
+}
+function reset() {
+  bursts.length = 0; charge = 0; push = 0; state = 'calm'; mixing = false; mix = 0; lastPcs = ''; lastMusicAt = 0;
+  Object.assign(P, { glow: 0, foam: 0, spark: 0, twinkle: .3, flash: 0, tintAmt: 0, tint: [0, .85, 1] });
+  vids.forEach(v => { v.pause(); v.currentTime = 0; }); active = 0; rate(.45);
+  if (playing) vids[0].play().catch(() => {});
+  draw(); wake();
+}
+function snapshot() {
+  draw();                                          // read back in the same task as the draw
+  const c = document.createElement('canvas'); c.width = canvas.width; c.height = canvas.height;
+  c.getContext('2d').drawImage(canvas, 0, 0);
+  return c;
+}
+function destroy() {
+  destroyed = true; if (raf) cancelAnimationFrame(raf);
+  vids.forEach(v => { v.pause(); v.removeAttribute('src'); v.load(); });
+  tex.forEach(t => gl.deleteTexture(t)); gl.deleteProgram(prog);
+  gl.getExtension('WEBGL_lose_context')?.loseContext();
+  removeEventListener('resize', resize);
+  window.musicWave = null;
+}
+
+window.musicWave = {
+  reset, frame, setPlaying, snapshot, destroy,
+  setFilter(name) { if (['notes', 'pitch', 'rhythm', 'harmony'].includes(name)) filter = name; },
+  setPitchPalette(hues) {
+    if (Array.isArray(hues) && hues.length > 1 && hues.every(Number.isFinite)) pitchHues = hues.slice();
+  },
+  debug: () => ({ state, filter, videoTime: +vt().toFixed(2), rate: vids[active].playbackRate, mixing, charge: +charge.toFixed(2),
+                  push: +push.toFixed(2), bursts: bursts.length, glow: +P.glow.toFixed(2), ready })
+};
+resize();
+
+// ---------- standalone test harness: synthetic music, no sound ----------
+if (EMBED) return;
+const go = document.getElementById('go'), sel = document.getElementById('filter'), pitch = document.getElementById('pitch'), status = document.getElementById('status');
+const CHORDS = [[57, 60, 64], [53, 57, 60], [48, 52, 55], [55, 59, 62]];   // Am F C G
+let synth = 0, start = 0, lastBeat = -1;
+function synthFrame() {
+  const t = (performance.now() - start) / 1000;
+  const beat = Math.floor(t / .6), onset = beat !== lastBeat; lastBeat = beat;
+  const bar = Math.floor(t / 2.4) % 4, chord = CHORDS[bar];
+  const swell = .5 + .5 * Math.sin(t * .5);
+  const F = { energy: .25 + .55 * swell, bass: .3 + .5 * (beat % 4 === 0 ? 1 : .3), bright: .4 + .3 * Math.sin(t * .9),
+              onset, flux: onset ? (beat % 4 === 0 ? .8 : .4) : .05, notes: [] };
+  const filterNow = sel.value;
+  if (filterNow === 'harmony') F.notes = chord.map((m, i) => ({ midi: m, pc: m % 12, s: [1, .8, .7][i], v: bar === 0 ? .52 : .85 }));
+  else if (filterNow === 'rhythm') F.notes = onset ? [{ midi: 48 + Math.round(24 * F.bright), pc: beat % 12, s: .45 + .55 * F.flux, v: .8 }] : [];
+  else {
+    const m = filterNow === 'pitch' && pitch.value ? Number(pitch.value) : chord[beat % 3] + (beat % 2 ? 12 : 0);
+    F.notes = [{ midi: m, pc: m % 12, s: .9, v: .8 }, { midi: chord[0] - 12, pc: chord[0] % 12, s: .5, v: .6 }];
+  }
+  window.musicWave?.frame(F, t);
+  status.textContent = `Silent test · ${filterNow} · ${window.musicWave?.debug().state}`;
+}
+go.addEventListener('click', () => {
+  if (synth) { clearInterval(synth); synth = 0; setPlaying(false); go.textContent = 'Play test music'; return; }
+  start = performance.now(); lastBeat = -1; setPlaying(true); synth = setInterval(synthFrame, 1000 / 36);
+  go.textContent = 'Pause';
+});
+sel.addEventListener('change', () => { window.musicWave?.setFilter(sel.value); pitch.hidden = sel.value !== 'pitch'; });
+document.getElementById('again').addEventListener('click', () => reset());
+})();
+</script>
+</body>
+</html>

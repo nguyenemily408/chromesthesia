@@ -187,6 +187,12 @@ void main(){
   float ramp = smoothstep(0.42, 0.92, uProg);               // the gold edges creep in during the second half
   float region = smoothstep(0., 0.07, fbm(px*0.007 + uSeed) - mix(0.95, uVeinAmt, ramp));   // only some edges, in patches
   float vein = smoothstep(uVein.x, uVein.y, edge)*mix(region, texture(uC, vUv).a * .9, uLocalGold);
+  if (uLocalGold > 1.5) {
+    float breaks = smoothstep(.50, .61, fbm(px*.028 + uSeed));
+    float pigment = (dR + dL + dU + dD) * .25;
+    float width = max(fwidth(pigment), .001);
+    vein = (1. - smoothstep(width*.25, width*1.35, abs(pigment-.12))) * breaks * .88;
+  }
   float cover = max(smoothstep(0.03, 0.2, ma), vein);
   if (cover > 0.002) {
     vec3 gold = vec3(0.83,0.69,0.36);                                  // a pale, warm gold, not ochre
@@ -407,8 +413,9 @@ function draw() {
   gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, sets[cur].c);
   gl.uniform1i(showP.u.uA, 0); gl.uniform1i(showP.u.uB, 1); gl.uniform1i(showP.u.uC, 2); gl.uniform1f(showP.u.uTime, step);
   gl.uniform1f(showP.u.uLook, LOOK); gl.uniform1f(showP.u.uProg, step / totalSteps); gl.uniform1f(showP.u.uSeed, (seed % 97) * 3.1);
-  gl.uniform1f(showP.u.uLocalGold, Number(externalClock && G_EDGE));
-  gl.uniform2f(showP.u.uVein, G_EDGE ? VEIN[0] : 9, G_EDGE ? VEIN[1] : 10); gl.uniform1f(showP.u.uVeinAmt, Math.max(0.3, (goldMode === 'harmony' ? 0.4 : VEIN[2]) - veinExtra)); gl.uniform2f(showP.u.uTexel, 1 / W, 1 / H); gl.uniform1f(showP.u.uDamp, dampAt(step / totalSteps));
+  const noteTracing = externalClock && goldMode === "notes";
+  gl.uniform1f(showP.u.uLocalGold, noteTracing ? 2 : Number(externalClock && G_EDGE));
+  gl.uniform2f(showP.u.uVein, (G_EDGE || noteTracing) ? VEIN[0] : 9, (G_EDGE || noteTracing) ? VEIN[1] : 10); gl.uniform1f(showP.u.uVeinAmt, Math.max(0.3, (goldMode === 'harmony' ? 0.4 : VEIN[2]) - veinExtra)); gl.uniform2f(showP.u.uTexel, 1 / W, 1 / H); gl.uniform1f(showP.u.uDamp, dampAt(step / totalSteps));
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   // pen lines
   const c = inkc.getContext('2d'), w = inkc.width, h = inkc.height, t = step / totalSteps;

@@ -23,6 +23,7 @@
   canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
   #living-watercolor{position:absolute;inset:0;width:100%;height:100%;border:0;background:#f6f3ec;pointer-events:none}
   #aurora-norway{position:absolute;inset:0;width:100%;height:100%;border:0;background:#000;pointer-events:none}
+  #bioluminescent-wave{position:absolute;inset:0;width:100%;height:100%;border:0;background:#020b11;pointer-events:none}
   body.waiting-for-music main iframe{visibility:hidden}
   #ref{position:absolute;inset:0;background:var(--paper);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;z-index:2}
   #ref img{max-width:100%;max-height:calc(100% - 28px);object-fit:contain;border:1px solid var(--line)}
@@ -102,13 +103,14 @@
   #youtube-dialog summary{cursor:pointer}
   #youtube-dialog details form{margin-top:.65rem}
   #youtube-share{background:#271e30 !important;color:white !important}
-  #soundcloud-panel{padding:8px 12px;border-bottom:1px solid var(--line)}
-  #soundcloud-panel iframe{display:block;border:0;width:100%;height:110px}
-  #soundcloud-panel p{margin:5px 0;font-size:.8rem}
-  #soundcloud-panel .actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-  #soundcloud-panel button{padding:4px 10px;font-size:.8rem}
-  #soundcloud-status:empty{display:none}
-  body:has(#soundcloud-panel:not([hidden])) .dock{opacity:1;pointer-events:auto;transform:translateX(-50%)}
+  .embedded-player{padding:8px 12px;border-bottom:1px solid var(--line)}
+  .embedded-player iframe{display:block;border:0;width:100%;height:110px}
+  #spotify-player{height:80px;border-radius:12px}
+  .embedded-player p{margin:5px 0;font-size:.8rem}
+  .embedded-player .actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px}
+  .embedded-player button{padding:4px 10px;font-size:.8rem}
+  .embedded-player p:empty{display:none}
+  body:has(.embedded-player:not([hidden])) .dock{opacity:1;pointer-events:auto;transform:translateX(-50%)}
   .welcome .wsub{display:block;margin-top:10px;font-size:.8rem;color:#514358}
   body.welcoming .top,body.welcoming .dock{display:none}
   body:not(.welcoming) .welcome{opacity:0;pointer-events:none}
@@ -207,7 +209,7 @@ if (location.protocol === 'file:') {
   <canvas id="cv" role="img" aria-label="Painting made from the music"></canvas>
 </main>
 <div class="dock" id="dock">
-<section id="soundcloud-panel" aria-label="SoundCloud player" hidden>
+<section id="soundcloud-panel" class="embedded-player" aria-label="SoundCloud player" hidden>
   <iframe id="soundcloud-player" title="SoundCloud music player" allow="autoplay"></iframe>
   <div class="actions">
     <button type="button" id="soundcloud-share">Share this tab’s audio</button>
@@ -216,14 +218,23 @@ if (location.protocol === 'file:') {
   </div>
   <p id="soundcloud-status" role="status"></p>
 </section>
+<section id="spotify-panel" class="embedded-player" aria-label="Spotify player" hidden>
+  <iframe id="spotify-player" title="Spotify music player" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"></iframe>
+  <div class="actions">
+    <button type="button" id="spotify-share">Share this tab’s audio</button>
+    <button type="button" id="spotify-close">Remove player</button>
+    <span>Select The Sound of Color with tab audio on.</span>
+  </div>
+  <p id="spotify-status" role="status"></p>
+</section>
 <p id="source" hidden></p>
 <section id="panel" aria-live="polite">
   <div id="lead"><span id="description"></span><small id="subnote"></small></div>
   <div id="legend"></div>
 </section>
 <footer aria-label="Playback">
-  <button type="button" id="play">Play demo</button>
-  <span id="track">18-second demo</span>
+  <button type="button" id="play" disabled>Play song</button>
+  <span id="track">No song selected</span>
   <input type="range" id="seek" min="0" max="1000" value="0" aria-label="Song position">
   <span id="clock">0:00</span>
   <button type="button" id="restart" hidden>Start over</button>
@@ -240,10 +251,10 @@ if (location.protocol === 'file:') {
       <button type="button" id="fs" title="Shortcut: F">Full screen <kbd>F</kbd></button>
     </div>
   </div>
-  <span class="note" id="foot">Local preview · demo audio</span>
+  <span class="note" id="foot">Local preview</span>
   <span class="sr-only" id="status" role="status"></span>
   <input type="file" id="file" accept="audio/*,.mp3,.wav,.m4a,.ogg,.flac" hidden>
-  <audio id="audio" preload="metadata"></audio>
+  <audio id="audio" preload="metadata" muted></audio>
 </footer>
 <div class="color-key" id="colorKey" role="region" aria-label="Color key" tabindex="0" hidden>
   <div class="color-key-row" id="colorKeyRow"></div>
@@ -263,10 +274,10 @@ if (location.protocol === 'file:') {
     <form id="youtube-form">
       <label for="youtube-url">Song or playlist link</label>
       <input type="url" id="youtube-url" autocomplete="off" placeholder="https://…" required>
-      <button type="submit">Open link</button>
+      <button type="submit">Use link</button>
     </form>
   </details>
-  <p>Paste a SoundCloud track or playlist link to play it on this page.</p>
+  <p>Paste a Spotify or SoundCloud track or playlist link to play it in the bottom bar.</p>
   <p id="youtube-steps">Play the song in your browser, then return here. Choose <strong>Share tab audio</strong>, select the tab that’s playing, and turn on <strong>Also share tab audio</strong>.</p>
   <button type="button" id="youtube-share">Share tab audio</button>
   <button type="button" id="youtube-close">Close</button>
@@ -1185,7 +1196,7 @@ const RHYTHM_COLORS = [6, 3, 10, 7];
 let rhythmAccent = 0, harmonyNow = null, prevT = 0;
 const demoLabel = () => '18-second demo';
 const liveClockLength = 24 * 60 * 60;
-const isDemo = () => !file && !tabCapture;
+const isDemo = () => !tabCapture && Boolean(demoUrl) && audio.getAttribute('src') === demoUrl;
 const playbackTime = () => tabCapture ? tabCapture.elapsed : audio.currentTime || 0;
 const playingMusic = () => tabCapture ? tabCapture.startedAt !== null : !audio.paused;
 const progress = () => clamp(playbackTime() / (tabCapture ? liveClockLength : isDemo() ? duration : audio.duration || duration));
@@ -1344,7 +1355,7 @@ function renderColorKey(chord=null){
   }
   if (style === 'livingWatercolor') {
     const gold = {
-      notes:'New notes bloom in their own colors',
+      notes:'New notes bloom in color, with fine gold along some edges',
       pitch:'More sound in a range adds more paint · Bigger jumps scatter gold farther',
       rhythm:'Strong hits draw lines. Harder hits draw longer lines.',
       harmony:'Edges trace new chords'
@@ -1354,6 +1365,8 @@ function renderColorKey(chord=null){
     if (trigger === 'notes') row.prepend(key, '·');
     else row.append('·', key);
   }
+  if (style === 'tide' && ['notes', 'pitch'].includes(trigger)) row.append(trigger === 'pitch'
+    ? '· Pitch colors trace the foam and sand lace' : '· Color glows inside the wave');
   key.scrollLeft=0;
 }
 
@@ -1386,7 +1399,7 @@ function renderLegend(){
   }else if(trigger==='rhythm'){
     L.textContent='Accents release color';
   }else if(trigger==='harmony'){L.id='legend';updateChordReadout()}
-  $('foot').textContent='Local preview · '+(isDemo()?'demo audio':'your file');
+  $('foot').textContent = tabCapture ? 'Shared tab' : isDemo() ? 'Demo audio' : file ? 'Your file' : 'Local preview';
 }
 $('seek').addEventListener('input',()=>{const dur=isDemo()?duration:(audio.duration||0);if(dur){audio.currentTime=dur*$('seek').value/1000;prevT=audio.currentTime}});
 function downloadCanvas(name, message){
@@ -1427,7 +1440,7 @@ const LIVING = (() => {
     iframe.id = 'living-watercolor';
     iframe.title = 'Living Watercolor artwork';
     iframe.tabIndex = -1;
-    iframe.src = '../../living-watercolor/watercolor.html?ui=0&auto=0&v=gold-pitch-drops';
+    iframe.src = '../../living-watercolor/watercolor.html?ui=0&auto=0&v=fine-gold-tracing';
     iframe.addEventListener('load', event => {
       if (event.currentTarget !== iframe) return;
       try { renderer = iframe.contentWindow.watercolor; } catch { renderer = null; }
@@ -1566,13 +1579,58 @@ const AURORA = (() => {
     snapshot() { return sky?.snapshot(); }
   };
 })();
+const WAVE = (() => {
+  let iframe, wave;
+  function init() {
+    if (wave) {
+      wave.setPitchPalette?.(PITCH_HUES);
+      wave.reset();
+      wave.setPlaying(playingMusic());
+      return;
+    }
+    if (iframe) return;
+    iframe = document.createElement('iframe');
+    iframe.id = 'bioluminescent-wave';
+    iframe.title = 'Bioluminescent wave';
+    iframe.tabIndex = -1;
+    iframe.src = '../../bioluminescent-shore/music-wave-preview.html?embed=1';
+    iframe.addEventListener('load', event => {
+      if (event.currentTarget !== iframe) return;
+      try { wave = iframe.contentWindow.musicWave; } catch { wave = null; }
+      if (!wave) {
+        say('The bioluminescent wave could not load. Choose another style and try again.');
+        return;
+      }
+      wave.setPitchPalette?.(PITCH_HUES);
+      wave.reset();
+      wave.setPlaying(playingMusic());
+    });
+    $('main').append(iframe);
+  }
+  return {
+    init,
+    frame(F, time) {
+      wave?.setFilter?.(trigger);
+      wave?.frame(F, time);
+    },
+    step() {},
+    resize() {},
+    setPlaying(playing) { wave?.setPlaying(playing); },
+    snapshot() { return wave?.snapshot(); },
+    remove() {
+      wave?.destroy();
+      iframe?.remove();
+      wave = iframe = null;
+    }
+  };
+})();
 const RENDERERS = {
   livingWatercolor: LIVING, ink: INK, glass: GLASS, aurora: AURORA,
-  tide: CONCEPTS.tide
+  tide: WAVE
 };
 let R = RENDERERS[style];
 /* watercolor and the ink painting mode keep everything and end as a still image; the others let go of old marks */
-const keeps = () => R === LIVING || R === AURORA || R === CONCEPTS.tide || (style === 'ink' && mode === 'paint');
+const keeps = () => R === LIVING || R === AURORA || R === WAVE || (style === 'ink' && mode === 'paint');
 let tabCapture = null;
 let file = null;
 let fileUrl = '';
@@ -1643,11 +1701,17 @@ function describe() {
 }
 
 function syncUI() {
-  play.textContent = tabCapture ? 'Stop listening' : audio.paused
-    ? audio.ended ? 'Replay' : started ? 'Resume' : file ? 'Play song' : 'Play demo'
+  const hasSong = audio.hasAttribute('src');
+  const track = $('track');
+  const label = tabCapture?.label || file?.name || (isDemo() ? demoLabel()
+    : !$('spotify-panel').hidden ? 'Spotify' : !$('soundcloud-panel').hidden ? 'SoundCloud' : 'No song selected');
+  if (track.textContent !== label) track.textContent = track.title = label;
+  play.disabled = starting || (!hasSong && !tabCapture);
+  play.textContent = tabCapture ? 'Stop listening' : !hasSong ? 'Play song' : audio.paused
+    ? audio.ended ? 'Replay' : started ? 'Resume' : isDemo() ? 'Play demo' : 'Play song'
     : 'Pause';
   $('restart').hidden = Boolean(tabCapture) || !started;
-  $('demo').hidden = !tabCapture && !file;
+  $('demo').hidden = isDemo();
   $('mute').hidden = Boolean(tabCapture);
   $('seek').hidden = Boolean(tabCapture);
   save.hidden = !complete;
@@ -1683,31 +1747,41 @@ function reset() {
   R = RENDERERS[style];
   if (R !== LIVING) LIVING.remove();
   if (R !== AURORA) AURORA.remove();
+  if (R !== WAVE) WAVE.remove();
   $('styleSel').value = style;
   renderSource();
   renderLegend();
-  R.init();
   backdrop();
   describe();
   syncUI();
 }
 
-function selectFile(nextFile) {
-  removeSoundCloud();
-  stopTabCapture();
-  const oldFileUrl = fileUrl;
-  file = nextFile;
-  fileUrl = file ? URL.createObjectURL(file) : '';
-  if (fileUrl) audio.src = fileUrl;
-  else {
+function clearLocalSong() {
+  audio.pause();
+  audio.muted = true;
+  if (audio.hasAttribute('src')) {
     audio.removeAttribute('src');
     audio.load();
   }
-  if (oldFileUrl) URL.revokeObjectURL(oldFileUrl);
+  if (fileUrl) URL.revokeObjectURL(fileUrl);
+  fileUrl = '';
+  file = null;
+}
+
+function selectLocalSong(nextFile) {
+  removeMusicPlayers();
+  stopTabCapture();
+  clearLocalSong();
+  file = nextFile;
+  if (file) {
+    fileUrl = URL.createObjectURL(file);
+    audio.src = fileUrl;
+  } else {
+    demoUrl ||= buildDemo();
+    audio.src = demoUrl;
+  }
   AURORA.nextScene();
   reset();
-  $('track').textContent = file ? file.name : demoLabel();
-  $('track').title = $('track').textContent;
 }
 
 function stopTabCapture() {
@@ -1722,13 +1796,12 @@ function endTabPlayback() {
   if (!tabCapture) return;
   const heardMusic = playingMusic();
   stopTabCapture();
-  removeSoundCloud();
+  removeMusicPlayers();
   if (R === LIVING) LIVING.pause();
   if (R === AURORA) AURORA.setPlaying(false);
+  if (R === WAVE) WAVE.setPlaying(false);
   complete = heardMusic && keeps();
   if (!heardMusic) reset();
-  $('track').textContent = file ? file.name : demoLabel();
-  $('track').title = $('track').textContent;
   renderSource();
   describe();
   syncUI();
@@ -1762,14 +1835,28 @@ function removeSoundCloud() {
   $('soundcloud-player').removeAttribute('src');
   $('soundcloud-panel').hidden = true;
 }
+function removeSpotify() {
+  $('spotify-player').removeAttribute('src');
+  $('spotify-panel').hidden = true;
+}
+function removeMusicPlayers() {
+  removeSoundCloud();
+  removeSpotify();
+}
+$('spotify-close').addEventListener('click', () => {
+  if (tabCapture) endTabPlayback();
+  removeSpotify();
+  syncUI();
+});
 $('soundcloud-close').addEventListener('click', () => {
   if (tabCapture) endTabPlayback();
   removeSoundCloud();
+  syncUI();
 });
 function embedSoundCloud(url) {
   if (tabCapture) endTabPlayback();
-  audio.pause();
-  removeSoundCloud();
+  clearLocalSong();
+  removeMusicPlayers();
   const widget = new URL('https://w.soundcloud.com/player/');
   widget.searchParams.set('url', url.href);
   widget.searchParams.set('auto_play', 'false');
@@ -1782,6 +1869,20 @@ function embedSoundCloud(url) {
   leaveWelcome();
   reset();
   $('soundcloud-share').focus();
+}
+function embedSpotify(kind, id) {
+  if (tabCapture) endTabPlayback();
+  clearLocalSong();
+  removeMusicPlayers();
+  const widget = new URL('https://open.spotify.com/embed/' + kind + '/' + id);
+  widget.searchParams.set('theme', '0');
+  $('spotify-player').src = widget.href;
+  $('spotify-status').textContent = '';
+  $('spotify-panel').hidden = false;
+  youtubeDialog.close();
+  leaveWelcome();
+  reset();
+  $('spotify-share').focus();
 }
 function openMusicTab(url) {
   window.open(url.href, '_blank', 'noopener,noreferrer');
@@ -1823,8 +1924,10 @@ $('youtube-form').addEventListener('submit', event => {
     embedSoundCloud(url);
     return;
   }
-  if (url.hostname === 'open.spotify.com' && /^\/(?:intl-[a-z-]+\/)?(?:track|album|playlist)\/[A-Za-z0-9]+\/?$/i.test(url.pathname)) {
-    openMusicTab(url);
+  const spotify = url.hostname === 'open.spotify.com' &&
+    url.pathname.match(/^\/(?:intl-[a-z-]+\/|embed\/)?(track|album|playlist)\/([A-Za-z0-9]{22})\/?$/i);
+  if (spotify) {
+    embedSpotify(spotify[1].toLowerCase(), spotify[2]);
     return;
   }
   const videoId = url.hostname === 'youtu.be' ? url.pathname.slice(1)
@@ -1838,14 +1941,14 @@ $('youtube-form').addEventListener('submit', event => {
   }
   openMusicTab(url);
 });
-async function shareMusicTab(currentTab = false) {
+async function shareMusicTab(currentTab = false, service = 'soundcloud') {
   youtubeShare.disabled = true;
   $('soundcloud-share').disabled = true;
-  const status = currentTab ? $('soundcloud-status') : youtubeStatus;
+  $('spotify-share').disabled = true;
+  const status = currentTab ? $(service + '-status') : youtubeStatus;
   status.textContent = '';
   let stream;
   try {
-    ensureAC();
     stream = await navigator.mediaDevices.getDisplayMedia({
       video: {displaySurface: 'browser'},
       audio: {echoCancellation: false, noiseSuppression: false, autoGainControl: false, suppressLocalAudioPlayback: false},
@@ -1857,23 +1960,9 @@ async function shareMusicTab(currentTab = false) {
       status.textContent = 'Choose the tab playing your song and turn on Also share tab audio.';
       return;
     }
-    const input = AC.createMediaStreamSource(stream);
-    input.connect(analyser);
-    input.connect(rhythmAnalyser);
-    stopTabCapture();
-    tabCapture = {stream, input, startedAt: null, elapsed: 0};
-    const trackStream = stream;
-    for (const track of stream.getTracks()) track.addEventListener('ended', () => {
-      if (tabCapture?.stream === trackStream) endTabPlayback();
-    }, {once: true});
+    connectMusicStream(stream);
     stream = null;
-    AURORA.nextScene();
-    leaveWelcome();
     youtubeDialog.close();
-    reset();
-    $('track').textContent = 'Listening to tab audio';
-    $('track').title = $('track').textContent;
-    say('Listening. Press play in the shared tab to start the artwork.');
   } catch (error) {
     console.warn('Tab audio could not start:', error.name, error.message);
     if (error.name === 'NotAllowedError') {
@@ -1889,11 +1978,60 @@ async function shareMusicTab(currentTab = false) {
     stream?.getTracks().forEach(track => track.stop());
     youtubeShare.disabled = false;
     $('soundcloud-share').disabled = false;
+    $('spotify-share').disabled = false;
   }
 }
 youtubeShare.addEventListener('click', () => shareMusicTab());
 $('soundcloud-share').addEventListener('click', () => shareMusicTab(true));
-window.addEventListener('pagehide', stopTabCapture);
+$('spotify-share').addEventListener('click', () => shareMusicTab(true, 'spotify'));
+function connectMusicStream(stream, label = 'Listening to tab audio', monitor = false) {
+  ensureAC();
+  const input = AC.createMediaStreamSource(stream);
+  input.connect(analyser);
+  input.connect(rhythmAnalyser);
+  // Chrome extension capture suppresses the original tab's speaker output.
+  if (monitor) input.connect(AC.destination);
+  stopTabCapture();
+  clearLocalSong();
+  tabCapture = {stream, input, label, startedAt: null, elapsed: 0};
+  for (const track of stream.getTracks()) track.addEventListener('ended', () => {
+    if (tabCapture?.stream === stream) endTabPlayback();
+  }, {once: true});
+  AURORA.nextScene();
+  leaveWelcome();
+  reset();
+  say(monitor
+    ? 'Connected to your music tab. Its audio plays here; pause the song there for silence.'
+    : 'Listening. Press play in the music tab to start the artwork.');
+}
+async function startExtensionMusic() {
+  if (location.protocol !== 'chrome-extension:' || !chrome.runtime?.id) return;
+  let stream;
+  try {
+    const response = await chrome.runtime.sendMessage({type: 'claim-music-stream'});
+    if (!response?.streamId) {
+      say('Play a song in its browser tab, then click the extension and Start visuals.');
+      return;
+    }
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: {mandatory: {chromeMediaSource: 'tab', chromeMediaSourceId: response.streamId}},
+      video: false
+    });
+    connectMusicStream(stream, response.title || 'Listening to music tab', true);
+    stream = null;
+  } catch {
+    leaveWelcome();
+    say('The music tab could not connect. Return to that tab and click the extension to try again.');
+  } finally {
+    stream?.getTracks().forEach(track => track.stop());
+  }
+}
+window.addEventListener('pagehide', () => {
+  audio.pause();
+  audio.muted = true;
+  if (tabCapture) endTabPlayback();
+  removeMusicPlayers();
+});
 
 async function togglePlayback() {
   if (tabCapture) { endTabPlayback(); return; }
@@ -1901,15 +2039,12 @@ async function togglePlayback() {
     audio.pause();
     return;
   }
-  if (starting) return;
-  removeSoundCloud();
+  if (starting || !audio.hasAttribute('src')) return;
+  removeMusicPlayers();
   starting = true;
   play.disabled = true;
   try {
     if (audio.ended) reset();
-    if (!audio.getAttribute('src')) {
-      audio.src = demoUrl || (demoUrl = buildDemo());
-    }
     ensureAC();
     if (!elSrc) {
       elSrc = AC.createMediaElementSource(audio);
@@ -1920,6 +2055,7 @@ async function togglePlayback() {
       elSrc.connect(output);
       output.connect(AC.destination);
     }
+    audio.muted = false;
     await audio.play();
     started = true;
   } catch (error) {
@@ -1929,7 +2065,6 @@ async function togglePlayback() {
     }
   } finally {
     starting = false;
-    play.disabled = false;
     syncUI();
   }
 }
@@ -1937,12 +2072,16 @@ async function togglePlayback() {
 /* until the visitor picks a style, each trigger opens in its suggested style; once they pick one, it stays */
 let styleChosen = false;
 /* restart the music after a change; if a restart is already under way, wait for it rather than giving up */
-const resume = () => { if (starting) setTimeout(resume, 60); else if (audio.paused) togglePlayback(); };
+function resume(source) {
+  if (!source || audio.getAttribute('src') !== source || tabCapture) return;
+  if (starting) setTimeout(() => resume(source), 60);
+  else if (audio.paused) togglePlayback();
+}
 $('styleSel').addEventListener('change', () => {
   const wasPlaying = !audio.paused;
   style = $('styleSel').value; styleChosen = true;
   reset();
-  if (wasPlaying) resume();
+  if (wasPlaying) resume(audio.getAttribute('src'));
   if (tabCapture) { say('Style changed. Still listening to the shared tab.'); return; }
   say('Style changed. The same track ' + (wasPlaying ? 'is playing again from the beginning.' : 'is ready to play from the beginning.'));
 });
@@ -1952,7 +2091,7 @@ $('filterSel').addEventListener('change', () => {
   if (!styleChosen) style = DEFAULTS[trigger].style;
   mode = DEFAULTS[trigger].mode;
   reset();
-  if (wasPlaying) resume();
+  if (wasPlaying) resume(audio.getAttribute('src'));
   if (tabCapture) { say(TRIGGER_NAMES[trigger] + ' selected. Still listening to the shared tab.'); return; }
   say(TRIGGER_NAMES[trigger] + ' selected. The track is ready to play from the beginning.');
 });
@@ -1963,10 +2102,10 @@ $('snapshot').addEventListener('click', () => {
 $('choose').addEventListener('click', () => $('file').click());
 $('file').addEventListener('change', event => {
   const [nextFile] = event.target.files;
-  if (nextFile) selectFile(nextFile);
+  if (nextFile) selectLocalSong(nextFile);
   event.target.value = '';
 });
-$('demo').addEventListener('click', () => selectFile(null));
+$('demo').addEventListener('click', () => selectLocalSong(null));
 $('mute').addEventListener('click', event => {
   const button = event.currentTarget;
   const muted = button.getAttribute('aria-pressed') === 'false';
@@ -1980,17 +2119,20 @@ audio.addEventListener('loadedmetadata', () => { if (R === LIVING && !isDemo()) 
 function showArtwork() {
   if (document.body.classList.contains('waiting-for-music')) {
     document.body.classList.remove('waiting-for-music');
-    if (R !== LIVING && R !== AURORA) R.init();
+    R.init();
   }
   if (R === LIVING) LIVING.play();
   if (R === AURORA) AURORA.setPlaying(true);
+  if (R === WAVE) WAVE.setPlaying(true);
 }
 audio.addEventListener('playing', showArtwork);
 audio.addEventListener('pause', () => {
   if (R === LIVING) LIVING.pause();
   if (R === AURORA) AURORA.setPlaying(false);
+  if (R === WAVE) WAVE.setPlaying(false);
 });
 audio.addEventListener('seeked', () => {
+  if (R === WAVE) { if (progress() < 1) complete = false; syncUI(); return; }
   if (R === AURORA) { AURORA.resetLights(); if (progress() < 1) complete = false; syncUI(); return; }
   if (R !== LIVING) return;
   LIVING.seek();
@@ -1999,6 +2141,7 @@ audio.addEventListener('seeked', () => {
 audio.addEventListener('ended', () => {
   if (R === LIVING) LIVING.finish();
   if (R === AURORA) AURORA.setPlaying(false);
+  if (R === WAVE) WAVE.setPlaying(false);
   complete = keeps();
   fading = !complete;
   if (fading) INK_GL.look.fade = .9925;
@@ -2014,7 +2157,7 @@ let resizeTimer;
 window.addEventListener('resize', () => {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
-    const still = complete && R !== LIVING && R !== AURORA ? document.createElement('canvas') : null;
+    const still = complete && R !== LIVING && R !== AURORA && R !== WAVE ? document.createElement('canvas') : null;
     if (still) {
       still.width = cv.width;
       still.height = cv.height;
@@ -2022,7 +2165,7 @@ window.addEventListener('resize', () => {
     }
     sizeCanvas();
     if (still) g.drawImage(still, 0, 0, W, H);
-    else R.resize();
+    else if (!document.body.classList.contains('waiting-for-music')) R.resize();
     backdrop();
   }, 120);
 });
@@ -2130,7 +2273,12 @@ function leaveWelcome() {
   $('welcome').inert = true;
   wake();
 }
-$('wplay').addEventListener('click', () => { leaveWelcome(); reset(); togglePlayback(); });
+$('wplay').addEventListener('click', () => {
+  leaveWelcome();
+  if (!audio.hasAttribute('src')) selectLocalSong(null);
+  else reset();
+  togglePlayback();
+});
 $('wchoose').addEventListener('click', () => $('file').click());
 $('file').addEventListener('change', () => { if (welcoming()) { syncWelcome(); backdrop(); } });
 
@@ -2148,6 +2296,7 @@ reset();
 syncWelcome();
 backdrop();
 requestAnimationFrame(loop);
+startExtensionMusic();
 })();
 </script>
 </html>
