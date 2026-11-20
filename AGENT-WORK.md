@@ -284,3 +284,7 @@ Keep one integrator responsible for shared app files. Give animation generation,
 - November 20 — Codex is saving the tested Spotify and YouTube song search and tab-listening flow to the existing GitHub project branch. Scope is the full-screen app, README, and work record.
 
 - November 20 — Confirmed the local app contains the tested Find a song flow for YouTube and Spotify. Rechecked the chooser in a visible browser and JavaScript syntax. Added the audio workflow and implementation limits to README.md. Prepared only the app page, README, and work record for upload to codex/sound-of-color-current. Live audio results remain the November 18 checks.
+
+- November 20 — Codex is adding SoundCloud discovery and an embedded SoundCloud player in the full-screen preview, including support for sharing the current tab.
+
+- November 20 — Added SoundCloud search and embedded playback. Shared the current tab in desktop Chrome and observed Flickermood by Forss drive Living Watercolor, with the listening timer advancing. Verified YouTube search, song playback after skipping an ad, and live input in Aurora. Pausing SoundCloud left its player paused with Aurora selected. Moved the embedded player into the bottom dock, kept that dock visible while the player is loaded, and verified the rendered layout. Syntax and simulated current/external capture options, link validation, analyzer connections, and removal passed. Spotify live input remains verified from November 18, with its new search controls checked since then.

@@ -102,6 +102,13 @@
   #youtube-dialog summary{cursor:pointer}
   #youtube-dialog details form{margin-top:.65rem}
   #youtube-share{background:#271e30 !important;color:white !important}
+  #soundcloud-panel{padding:8px 12px;border-bottom:1px solid var(--line)}
+  #soundcloud-panel iframe{display:block;border:0;width:100%;height:110px}
+  #soundcloud-panel p{margin:5px 0;font-size:.8rem}
+  #soundcloud-panel .actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  #soundcloud-panel button{padding:4px 10px;font-size:.8rem}
+  #soundcloud-status:empty{display:none}
+  body:has(#soundcloud-panel:not([hidden])) .dock{opacity:1;pointer-events:auto;transform:translateX(-50%)}
   .welcome .wsub{display:block;margin-top:10px;font-size:.8rem;color:#514358}
   body.welcoming .top,body.welcoming .dock{display:none}
   body:not(.welcoming) .welcome{opacity:0;pointer-events:none}
@@ -161,7 +168,7 @@
   <div class="welcome-actions" id="welcome-actions">
     <button type="button" class="go" id="wplay"><span id="wplaylabel">Play demo</span><small id="wsub">18-second track</small></button>
     <button type="button" id="wchoose">Upload MP3<small>Choose a file from your device</small></button>
-    <button type="button" id="wyoutube" hidden>Find a song<small id="wyoutube-hint">YouTube or Spotify in a browser tab</small></button>
+    <button type="button" id="wyoutube" hidden>Find a song<small id="wyoutube-hint">YouTube, Spotify or SoundCloud</small></button>
   </div>
   <a class="go" id="web-preview" href="http://127.0.0.1:8792/experiments/fable-ink/three-styles-full.html" hidden>Open the local web preview</a>
   <span class="wsub" id="file-preview-note" hidden>The web preview connects the music player to Living Watercolor and Aurora.</span>
@@ -200,6 +207,15 @@ if (location.protocol === 'file:') {
   <canvas id="cv" role="img" aria-label="Painting made from the music"></canvas>
 </main>
 <div class="dock" id="dock">
+<section id="soundcloud-panel" aria-label="SoundCloud player" hidden>
+  <iframe id="soundcloud-player" title="SoundCloud music player" allow="autoplay"></iframe>
+  <div class="actions">
+    <button type="button" id="soundcloud-share">Share this tab’s audio</button>
+    <button type="button" id="soundcloud-close">Remove player</button>
+    <span>Select The Sound of Color with tab audio on.</span>
+  </div>
+  <p id="soundcloud-status" role="status"></p>
+</section>
 <p id="source" hidden></p>
 <section id="panel" aria-live="polite">
   <div id="lead"><span id="description"></span><small id="subnote"></small></div>
@@ -240,15 +256,17 @@ if (location.protocol === 'file:') {
     <input type="search" id="music-query" placeholder="Vivaldi Winter" maxlength="200" required>
     <button type="submit" value="youtube">Search YouTube</button>
     <button type="submit" value="spotify">Search Spotify</button>
+    <button type="submit" value="soundcloud">Search SoundCloud</button>
   </form>
   <details id="music-link">
-    <summary>Use a YouTube or Spotify link</summary>
+    <summary>Use a YouTube, Spotify or SoundCloud link</summary>
     <form id="youtube-form">
       <label for="youtube-url">Song or playlist link</label>
       <input type="url" id="youtube-url" autocomplete="off" placeholder="https://…" required>
       <button type="submit">Open link</button>
     </form>
   </details>
+  <p>Paste a SoundCloud track or playlist link to play it on this page.</p>
   <p id="youtube-steps">Play the song in your browser, then return here. Choose <strong>Share tab audio</strong>, select the tab that’s playing, and turn on <strong>Also share tab audio</strong>.</p>
   <button type="button" id="youtube-share">Share tab audio</button>
   <button type="button" id="youtube-close">Close</button>
@@ -1675,6 +1693,7 @@ function reset() {
 }
 
 function selectFile(nextFile) {
+  removeSoundCloud();
   stopTabCapture();
   const oldFileUrl = fileUrl;
   file = nextFile;
@@ -1703,6 +1722,7 @@ function endTabPlayback() {
   if (!tabCapture) return;
   const heardMusic = playingMusic();
   stopTabCapture();
+  removeSoundCloud();
   if (R === LIVING) LIVING.pause();
   if (R === AURORA) AURORA.setPlaying(false);
   complete = heardMusic && keeps();
@@ -1738,6 +1758,31 @@ function openYouTubeDialog(event) {
 $('youtube').addEventListener('click', openYouTubeDialog);
 $('wyoutube').addEventListener('click', openYouTubeDialog);
 $('youtube-close').addEventListener('click', () => youtubeDialog.close());
+function removeSoundCloud() {
+  $('soundcloud-player').removeAttribute('src');
+  $('soundcloud-panel').hidden = true;
+}
+$('soundcloud-close').addEventListener('click', () => {
+  if (tabCapture) endTabPlayback();
+  removeSoundCloud();
+});
+function embedSoundCloud(url) {
+  if (tabCapture) endTabPlayback();
+  audio.pause();
+  removeSoundCloud();
+  const widget = new URL('https://w.soundcloud.com/player/');
+  widget.searchParams.set('url', url.href);
+  widget.searchParams.set('auto_play', 'false');
+  widget.searchParams.set('show_artwork', 'true');
+  widget.searchParams.set('visual', 'false');
+  $('soundcloud-player').src = widget.href;
+  $('soundcloud-status').textContent = '';
+  $('soundcloud-panel').hidden = false;
+  youtubeDialog.close();
+  leaveWelcome();
+  reset();
+  $('soundcloud-share').focus();
+}
 function openMusicTab(url) {
   window.open(url.href, '_blank', 'noopener,noreferrer');
   youtubeStatus.textContent = 'The music site opens in a new tab. Play your song there, then return here to share its audio.';
@@ -1753,6 +1798,12 @@ $('music-search-form').addEventListener('submit', event => {
     openMusicTab(new URL('https://open.spotify.com/search/' + encodeURIComponent(query)));
     return;
   }
+  if (event.submitter?.value === 'soundcloud') {
+    const url = new URL('https://soundcloud.com/search/sounds');
+    url.searchParams.set('q', query);
+    openMusicTab(url);
+    return;
+  }
   const url = new URL('https://www.youtube.com/results');
   url.searchParams.set('search_query', query);
   openMusicTab(url);
@@ -1761,9 +1812,15 @@ $('youtube-form').addEventListener('submit', event => {
   event.preventDefault();
   let url;
   try { url = new URL($('youtube-url').value); } catch {}
-  const invalidLink = 'Paste a YouTube video or playlist link, or a Spotify song, album, or playlist link.';
+  const invalidLink = 'Paste a YouTube, Spotify or SoundCloud track or playlist link.';
   if (!url || url.protocol !== 'https:' || url.port || url.username || url.password) {
     youtubeStatus.textContent = invalidLink;
+    return;
+  }
+  if (['soundcloud.com', 'www.soundcloud.com', 'm.soundcloud.com'].includes(url.hostname) &&
+      /^\/[\w-]+\/(?:sets\/)?[\w-]+\/?$/.test(url.pathname)) {
+    url.hostname = 'soundcloud.com';
+    embedSoundCloud(url);
     return;
   }
   if (url.hostname === 'open.spotify.com' && /^\/(?:intl-[a-z-]+\/)?(?:track|album|playlist)\/[A-Za-z0-9]+\/?$/i.test(url.pathname)) {
@@ -1781,19 +1838,23 @@ $('youtube-form').addEventListener('submit', event => {
   }
   openMusicTab(url);
 });
-youtubeShare.addEventListener('click', async () => {
+async function shareMusicTab(currentTab = false) {
   youtubeShare.disabled = true;
+  $('soundcloud-share').disabled = true;
+  const status = currentTab ? $('soundcloud-status') : youtubeStatus;
+  status.textContent = '';
   let stream;
   try {
     ensureAC();
     stream = await navigator.mediaDevices.getDisplayMedia({
       video: {displaySurface: 'browser'},
       audio: {echoCancellation: false, noiseSuppression: false, autoGainControl: false, suppressLocalAudioPlayback: false},
-      selfBrowserSurface: 'exclude', systemAudio: 'exclude', monitorTypeSurfaces: 'exclude', surfaceSwitching: 'exclude'
+      selfBrowserSurface: 'include', preferCurrentTab: currentTab,
+      systemAudio: 'exclude', monitorTypeSurfaces: 'exclude', surfaceSwitching: 'exclude'
     });
     const surface = stream.getVideoTracks()[0]?.getSettings().displaySurface;
     if ((surface && surface !== 'browser') || !stream.getAudioTracks().length) {
-      youtubeStatus.textContent = 'Choose the tab playing your song and turn on Also share tab audio.';
+      status.textContent = 'Choose the tab playing your song and turn on Also share tab audio.';
       return;
     }
     const input = AC.createMediaStreamSource(stream);
@@ -1816,19 +1877,22 @@ youtubeShare.addEventListener('click', async () => {
   } catch (error) {
     console.warn('Tab audio could not start:', error.name, error.message);
     if (error.name === 'NotAllowedError') {
-      youtubeStatus.textContent = 'Tab sharing was canceled or blocked. Click Share tab audio to try again.';
+      status.textContent = 'Tab sharing was canceled or blocked. Click Share tab audio to try again.';
     } else if (error.name === 'InvalidStateError') {
-      youtubeStatus.textContent = 'Bring this Chrome or Edge tab to the front, then click Share tab audio again.';
+      status.textContent = 'Bring this Chrome or Edge tab to the front, then click Share tab audio again.';
     } else if (error.name === 'NotReadableError') {
-      youtubeStatus.textContent = 'The browser could not read the shared tab. Check its screen sharing permissions, or upload an MP3.';
+      status.textContent = 'The browser could not read the shared tab. Check its screen sharing permissions, or upload an MP3.';
     } else {
-      youtubeStatus.textContent = 'Tab audio could not start. Open this page in desktop Chrome or Edge, or upload an MP3.';
+      status.textContent = 'Tab audio could not start. Open this page in desktop Chrome or Edge, or upload an MP3.';
     }
   } finally {
     stream?.getTracks().forEach(track => track.stop());
     youtubeShare.disabled = false;
+    $('soundcloud-share').disabled = false;
   }
-});
+}
+youtubeShare.addEventListener('click', () => shareMusicTab());
+$('soundcloud-share').addEventListener('click', () => shareMusicTab(true));
 window.addEventListener('pagehide', stopTabCapture);
 
 async function togglePlayback() {
@@ -1838,6 +1902,7 @@ async function togglePlayback() {
     return;
   }
   if (starting) return;
+  removeSoundCloud();
   starting = true;
   play.disabled = true;
   try {
