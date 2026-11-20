@@ -10,6 +10,8 @@ python3 -m http.server 8792 --bind 127.0.0.1
 
 Open [the local web preview](http://127.0.0.1:8792/experiments/fable-ink/three-styles-full.html), then choose **Play demo** or **Upload MP3**. The **Art style** and **Follows** controls appear when the canvas opens and keep their selections independently. **Play demo** uses Vivaldi’s *Winter*; the page stays silent until Play. Living Watercolor following Rhythm uses the gold-line reference painting; Notes, Pitch and Harmony keep their audio-driven painting. These changes are live at [soundofcolor.vercel.app](https://soundofcolor.vercel.app/); see HANDOFF.md for verification and deployment details. Recording credits: [assets/audio/CREDITS.md](assets/audio/CREDITS.md). Keep the project folders together so the preview can find its files.
 
+Diamond uses brighter colored facets with reduced gray lighting and a near-black background; its colors still follow the music.
+
 On desktop, choose **Find a song** on the welcome screen or under **More**, then choose a service. Both entry points use the same steps. For Spotify, copy the song/album/playlist link using Spotify’s **Share** menu; the Sound of Color website address is not a song link. An incorrect link now shows guidance directly below the box.
 
 - **YouTube, SoundCloud and Spotify:** paste a supported song or playlist link and choose **Use link**. The service’s own player loads in the bottom bar and the app requests this tab’s audio. Choose the Sound of Color tab with audio sharing enabled. The player attempts to start; its own Play control remains available. Pause holds the artwork and its timer; Play resumes the same painting.

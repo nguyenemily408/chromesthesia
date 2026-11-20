@@ -4,11 +4,19 @@ Updated November 20, 2026, Singapore time. Written by Codex for Emily and the ne
 
 This is the starting point for the current app. Older handoffs explain earlier experiments and can contain choices Emily has since changed. Read this file, `AGENTS.md`, and the latest entries in `AGENT-WORK.md` before editing. Check the actual files again before making changes.
 
-## Brighter Diamond release preparation — November 20
+## Current production: brighter Diamond — November 20
+
+**LIVE:** https://soundofcolor.vercel.app/ and the older https://the-sound-of-color-demo.vercel.app/ serve **3e458fc9a16ca8b8ff72614a7871c26d2b439795** from **codex/bright-diamond-20261120**. Production deployment **dpl_2UvnSghoqYVeNkGJrSwYB366Rjsf** is READY on the same project/team as the prior release. Immutable URL: https://the-sound-of-color-demo-m59a13slo-sherry-bluejayfinas-projects.vercel.app/ . Both public aliases were confirmed on this deployment.
+
+Emily approved the real-code brighter-facet still. Diamond now uses stronger colored lighting, much less gray/white light, softer white facet edges and a near-black backdrop. The exact shader from the approved still is applied to the existing animation. Shape, camera, turning motion, musical color mapping, filters and pause behavior are unchanged; no Inner Aurora ribbons. All prior app changes remain included.
+
+Checked locally with real Vivaldi animation to about 0:44, then a fixed clock and identical settled full-page screenshots on Pause. Source and eight packaged extension scripts passed syntax. Checked the public page: silent welcome, Art Style/Follows labels, Vivaldi playback with Diamond/Notes, visible brighter facets/dark backdrop, and Pause → Resume at 0:31. No warnings/errors in the public check. Left the public demo paused. Screenshot `design-previews/diamond-brighter-public.png`; approved still `diamond-bright-facets-code-still.png`. The shader was visually tested during actual music; the standalone still uses an illustrative fixed color frame. Physical phones, full-song playback and every filter/style combination were not repeated for this lighting-only change. Local extension package rebuilt, installed extension not reloaded.
+
+## Earlier Diamond release preparation — November 20
 
 Emily approved `design-previews/diamond-bright-facets-code-still.html` and asked to apply it. Exactly that preview’s lighting/backdrop values are now in the app’s GLASS renderer: stronger colored light, reduced gray ambient/white highlights, softer edge lighting and a near-black background. The facet geometry, camera, turning motion, note colors and music analysis are unchanged. There are no Inner Aurora ribbons. JavaScript and all eight packaged extension scripts passed syntax; the actual animated Diamond played real Vivaldi for about 44 seconds, then held the clock and a pixel-identical full-page screenshot on Pause. The local installed extension was not reloaded. Branch `codex/bright-diamond-20261120` is prepared for the existing public project; final deployment receipt follows verification.
 
-## Latest production release — November 20
+## Previous pause/menu release — November 20
 
 **LIVE and checked:** https://soundofcolor.vercel.app/ and https://the-sound-of-color-demo.vercel.app/ now serve source commit **3688e3520bb5216db6637bdb31a078dafac0ebf5** on GitHub branch **codex/pause-art-release-20261120**. Production deployment **dpl_41cDNiGYzszFJcyNp6RQVWH3ciLV**, READY, project **prj_7Md8rEGOK6Qhb39zU6ryENUvtqsb**, team **team_F5GYYbVQjva2kptBEk3nqujD**. Immutable URL: https://the-sound-of-color-demo-8sva5rslj-sherry-bluejayfinas-projects.vercel.app/ . Both public aliases are attached to this deployment. This supersedes production 31b0438 and the older status entries below.
 
