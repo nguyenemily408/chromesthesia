@@ -4,7 +4,19 @@ Updated November 20, 2026, Singapore time. Written by Codex for Emily and the ne
 
 This is the starting point for the current app. Older handoffs explain earlier experiments and can contain choices Emily has since changed. Read this file, `AGENTS.md`, and the latest entries in `AGENT-WORK.md` before editing. Check the actual files again before making changes.
 
-## Approved release in progress — November 20
+## Latest production release — November 20
+
+**LIVE and checked:** https://soundofcolor.vercel.app/ and https://the-sound-of-color-demo.vercel.app/ now serve source commit **3688e3520bb5216db6637bdb31a078dafac0ebf5** on GitHub branch **codex/pause-art-release-20261120**. Production deployment **dpl_41cDNiGYzszFJcyNp6RQVWH3ciLV**, READY, project **prj_7Md8rEGOK6Qhb39zU6ryENUvtqsb**, team **team_F5GYYbVQjva2kptBEk3nqujD**. Immutable URL: https://the-sound-of-color-demo-8sva5rslj-sherry-bluejayfinas-projects.vercel.app/ . Both public aliases are attached to this deployment. This supersedes production 31b0438 and the older status entries below.
+
+Includes the Vivaldi Winter recording, Rhythm-only gold-line watercolor with approved beat accents/short-song spreading, independent **Art Style** and **Follows** controls, Spotify link guidance, the clarified Aurora Rhythm key, player-song reset logic and true pause. Diamond’s visual renderer is unchanged.
+
+Public desktop Chrome checks: silent welcome (audio source absent, paused at zero), exact new menu labels, four Follows options, Vivaldi source played with Aurora, Rhythm key read “Soft beat = gentle glow · Strong beat = brighter pulse”, and changing Art Style retained Rhythm. More → Find a song → Spotify loaded the real playlist with real tab-audio sharing and drove Living Watercolor. Spotify Pause held at **0:38 · Paused**; separate cropped artwork screenshots had identical SHA-256 hashes and the timer stayed fixed. No console warnings/errors in this public check. Saved proof `design-previews/public-pause-release.png`. The local check additionally verified resume and manually clicked Spotify Next. Public Spotify was left paused, not playing.
+
+This is a static deployment; no database/functions were added. Source and packaged scripts passed syntax checks; clock fixture passed. Physical phones, a complete song, SoundCloud/YouTube pause events and the installed extension were not retested. The rebuilt local extension (all eight scripts checked, including the final menu wording) requires a manual reload to replace the installed copy. The established vercel.json is unchanged; .vercelignore adds only the intentional Vivaldi audio allowlist.
+
+**Diamond follow-up — latest choice:** Emily rejected Inner Aurora after seeing the actual code-rendered still. Keep the existing color-changing facets; only the background should be darker black. The separate local preview is `design-previews/diamond-dark-background-code-still.html`, screenshot `diamond-dark-background-code-still.png`. It copies the current renderer, reduces its backdrop light, and freezes one illustrative color frame. Browser WebGL compiled without warnings/errors. Main app and standalone watercolor bytes were checked against deployed 3688e35 and remain unchanged. The dark-background change is a preview only, awaiting her review before integration/publication. Earlier Inner Aurora code still and AI comparison board remain local references, not the selected design.
+
+## Earlier release preparation notes — November 20
 
 Emily approved publishing the reviewed local changes to **https://soundofcolor.vercel.app/**, with a true artwork-pause fix required first. The release is being prepared on `codex/pause-art-release-20261120`, based on the intervening production commit `31b0438709948d335097bd57b73346e455895a22` (its Spotify track/reset fixes are preserved in the current shared player helper). Publication is not complete until a deployment receipt is added below.
 
@@ -223,7 +235,7 @@ Emily previously asked to make the diamond larger on screen; check the actual cu
 
 ## GitHub and public website status
 
-**Local changes awaiting review:** Vivaldi demo, Rhythm-only gold-line painting, independent menus and Art style/Follows labels are not in the deployment below. No commit, push or publication was made for this review.
+**Historical status below:** the latest production release and current source are recorded at the top of this handoff. Earlier release records remain for history.
 
 **Published and checked by Codex on November 20:** the current public link is **https://soundofcolor.vercel.app/**. Emily asked to shorten the link to “soundofcolor”; it was added as a verified production domain on the existing demo project. **https://the-sound-of-color-demo.vercel.app/** still works and points to the same release. No paid domain was bought, no project was replaced, and neither address is a redirect to Claude's other Vercel project.
 
