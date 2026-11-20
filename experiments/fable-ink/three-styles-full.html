@@ -1905,6 +1905,7 @@ function removeSoundCloud() {
   $('soundcloud-panel').hidden = true;
   embeddedService = '';
   playerLoaded = wantPlay = songStarted = false;
+  spotifySong = ''; spotifyPosition = 0;
   clearTimeout(playRetry);
   clearTimeout(silenceCheck);
 }
@@ -1986,6 +1987,7 @@ function embedMusicPlayer(service, src) {
   // permission to ask. If it is declined, the Share button in the dock asks again.
   // The song starts by itself once that question is answered, so the artwork hears it from the start.
   playerLoaded = wantPlay = songStarted = false;
+  spotifySong = ''; spotifyPosition = 0;
   const startSong = () => {
     if (embeddedService !== service) return;
     wantPlay = true;
@@ -2034,6 +2036,26 @@ window.addEventListener('message', event => {
     $('player-newtab').classList.add('accent');
     $('player-newtab').textContent = 'Open on YouTube';
   }
+});
+// Spotify reports its current song. A new song or a restart begins a fresh painting;
+// pausing the same song keeps the painting, even through a long silent gap.
+let spotifySong = '', spotifyPosition = 0;
+function spotifySongReport(song, position = null) {
+  const changed = Boolean(spotifySong) && song !== spotifySong;
+  const startedOver = position != null && song === spotifySong && position < 1500 && spotifyPosition > position + 3000;
+  spotifySong = song;
+  if (changed) spotifyPosition = 0;
+  if (position != null) spotifyPosition = position;
+  if ((changed || startedOver) && tabCapture && tabCapture.startedAt != null) {
+    AURORA.nextScene();
+    reset();
+  }
+}
+window.addEventListener('message', event => {
+  if (embeddedService !== 'spotify' || event.origin !== 'https://open.spotify.com' ||
+      event.source !== $('soundcloud-player').contentWindow) return;
+  const {playingURI, position} = event.data?.type === 'playback_update' ? event.data.payload || {} : {};
+  if (playingURI) spotifySongReport(playingURI, Number.isFinite(position) ? position : null);
 });
 musicLinkForm.addEventListener('submit', event => {
   event.preventDefault();
@@ -2345,7 +2367,8 @@ function loop(now) {
       else {
         const gap = tabCapture.quietSince == null ? 0 : now - tabCapture.quietSince;
         tabCapture.quietSince = null;
-        if (gap >= NEW_SONG_GAP_MS) {
+        // Spotify song messages handle Next/restart; silence in that player may be a pause.
+        if (gap >= NEW_SONG_GAP_MS && !(embeddedService === 'spotify' && spotifySong)) {
           AURORA.nextScene();
           reset();
           return;
