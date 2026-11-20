@@ -4,7 +4,11 @@ Updated November 20, 2026, Singapore time. Written by Codex for Emily and the ne
 
 This is the starting point for the current app. Older handoffs explain earlier experiments and can contain choices Emily has since changed. Read this file, `AGENTS.md`, and the latest entries in `AGENT-WORK.md` before editing. Check the actual files again before making changes.
 
-## Current production: brighter Diamond — November 20
+## Diamond brightness reversal — November 20
+
+Emily found the brighter animation too bright and requested reversing its colors. The original Diamond lighting/material values from source 3688e35 have been restored exactly, keeping only the darker-black backdrop. This means restoring the previous color intensity, exposure, ambient/key lighting and facet edge lighting; there is no hue inversion. Geometry, animation, music mapping and all other styles/controls are preserved. A narrow correction is being published to the existing public site; final receipt follows verification.
+
+## Previous brighter Diamond release — November 20
 
 **LIVE:** https://soundofcolor.vercel.app/ and the older https://the-sound-of-color-demo.vercel.app/ serve **3e458fc9a16ca8b8ff72614a7871c26d2b439795** from **codex/bright-diamond-20261120**. Production deployment **dpl_2UvnSghoqYVeNkGJrSwYB366Rjsf** is READY on the same project/team as the prior release. Immutable URL: https://the-sound-of-color-demo-m59a13slo-sherry-bluejayfinas-projects.vercel.app/ . Both public aliases were confirmed on this deployment.
 
