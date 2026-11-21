@@ -1,1 +1,11 @@
-{"framework": null, "redirects": [{"source": "/", "destination": "/experiments/fable-ink/three-styles-full.html", "permanent": false}], "headers": [{"source": "/(.*)", "headers": [{"key": "Cache-Control", "value": "public, max-age=0, must-revalidate"}]}]}
+{
+  "framework": null,
+  "rewrites": [
+    { "source": "/", "destination": "/experiments/fable-ink/three-styles-full.html" },
+    { "source": "/concept-styles.js", "destination": "/experiments/fable-ink/concept-styles.js" },
+    { "source": "/aurora-norway/:path*", "destination": "/experiments/aurora-norway/:path*" }
+  ],
+  "headers": [
+    { "source": "/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }] }
+  ]
+}
