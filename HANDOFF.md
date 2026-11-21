@@ -1,10 +1,18 @@
 # The Sound of Color — current project handover
 
-Updated November 20, 2026, Singapore time. Written by Codex for Emily and the next Codex or Claude session.
+Updated November 21, 2026, Singapore time. Written by Codex for Emily and the next Codex or Claude session.
 
 This is the starting point for the current app. Older handoffs explain earlier experiments and can contain choices Emily has since changed. Read this file, `AGENTS.md`, and the latest entries in `AGENT-WORK.md` before editing. Check the actual files again before making changes.
 
-## Current production: original Diamond lighting restored — November 20
+## Current production: clean short address — November 21
+
+**LIVE:** https://soundofcolor.vercel.app/ now keeps that exact root address in the browser. Source **bb74a3592d623f5d559288eb916a0b73c4eb6158**, branch **codex/clean-root-url-20261121**; production **dpl_6xfKtgK9ZDCpAkDdD3NuA3vnVX9y** is READY on the same project **prj_7Md8rEGOK6Qhb39zU6ryENUvtqsb**, team **team_F5GYYbVQjva2kptBEk3nqujD**. Both soundofcolor.vercel.app and the older the-sound-of-color-demo.vercel.app are attached. Immutable deployment: https://the-sound-of-color-demo-bsy4ka79a-sherry-bluejayfinas-projects.vercel.app/ .
+
+Only vercel.json changes runtime: the root redirect is now an internal rewrite, with narrow aliases for /concept-styles.js and /aurora-norway/:path* so existing relative paths still work. All app/artwork source, audio and .vercelignore are identical to the previous public release. Old deep links remain valid; visitors using them directly still see their original path. Share the root address above. Local python http.server does not implement Vercel rewrites, so local preview instructions still use the full HTML path.
+
+Public browser check from the exact root URL: no path redirect, silent welcome with audio paused at zero and no source; real Vivaldi played and Living Watercolor painted; Aurora over Norway loaded its scene and reacted to the same demo. Art Style retained Notes when switched, and Follows lists Notes, Pitch, Rhythm, Harmony. No console warnings/errors. Paused playback, then reloaded to silent welcome and left that root tab open. Proof: design-previews/clean-root-url-public.png. JSON/destination and existing app/shared-script syntax checks passed. No full-song, external-service, physical-phone or extension retest for this routing-only change. Extension package was not changed or reloaded.
+
+## Previous production: original Diamond lighting restored — November 20
 
 **LIVE:** https://soundofcolor.vercel.app/ and https://the-sound-of-color-demo.vercel.app/ now serve **b1053d1dc342b5c246e1c2c4c4134212ea4a6676**, branch **codex/diamond-original-colors-20261120**. Production **dpl_HnKNwU98gN1gURYhMVVZ7cuhDuAN** is READY on the existing demo project/team; both public aliases were verified. Immutable URL: https://the-sound-of-color-demo-611u8tw4k-sherry-bluejayfinas-projects.vercel.app/ .
 
